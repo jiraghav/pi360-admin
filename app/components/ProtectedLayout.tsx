@@ -26,9 +26,30 @@ export default function ProtectedLayout({ children }: ProtectedLayoutProps) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-gray-900">Loading...</h2>
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "white",
+          zIndex: 50,
+        }}
+      >
+        <div style={{ textAlign: "center" }}>
+          <h2
+            style={{
+              fontSize: "1.25rem",
+              fontWeight: "600",
+              color: "#111827",
+            }}
+          >
+            Loading...
+          </h2>
         </div>
       </div>
     );
