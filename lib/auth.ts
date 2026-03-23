@@ -20,23 +20,42 @@ export const getUser = (): User | null => {
     return null;
 };
 
-export const login = (username: string, password: string): boolean => {
-    // Simple validation - in production, validate against a real backend
-    if (username && password) {
-        const user: User = {
-            username,
-            id: Math.random().toString(36).substr(2, 9),
-        };
-        const token = "token_" + Date.now();
-        localStorage.setItem("authToken", token);
-        localStorage.setItem("user", JSON.stringify(user));
-        // Set cookie for middleware authentication
-        if (typeof window !== "undefined") {
-            document.cookie = `authToken=${token}; path=/; max-age=86400; SameSite=Strict`;
+export const login = async (username: string, password: string): Promise<boolean> => {
+    try {
+        const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost/cic-clinic/openemr/api";
+        const response = await fetch(`${baseUrl}/lawyer_apis/login.php`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                user: username,
+                pass: password,
+            }),
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            // Assuming the API returns user data and token
+            const user: User = {
+                username: data.username || username,
+                id: data.id || Math.random().toString(36).substr(2, 9),
+            };
+            const token = data.token || "token_" + Date.now();
+            localStorage.setItem("authToken", token);
+            localStorage.setItem("user", JSON.stringify(user));
+            // Set cookie for middleware authentication
+            if (typeof window !== "undefined") {
+                document.cookie = `authToken=${token}; path=/; max-age=86400; SameSite=Strict`;
+            }
+            return true;
+        } else {
+            return false;
         }
-        return true;
+    } catch (error) {
+        console.error("Login error:", error);
+        return false;
     }
-    return false;
 };
 
 export const logout = (): void => {

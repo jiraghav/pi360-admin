@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { getUser } from "@/lib/auth";
 
 interface SidebarProps {
   onLogout?: () => void;
@@ -9,8 +10,17 @@ interface SidebarProps {
 
 export default function Sidebar({ onLogout }: SidebarProps) {
   const path = usePathname();
+  const user = getUser();
 
   const isActive = (route: string) => path.includes(route);
+
+  const getInitials = (username: string) => {
+    return username
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase())
+      .join('')
+      .slice(0, 2);
+  };
 
   const closeMobileSidebar = () => {
     const sidebar = document.querySelector(".sidebar");
@@ -158,9 +168,9 @@ export default function Sidebar({ onLogout }: SidebarProps) {
 
       {/* Footer */}
       <div className="sidebar-foot">
-        <div className="miniuser">FM</div>
+        <div className="miniuser">{user ? getInitials(user.username) : 'U'}</div>
         <div className="uinfo">
-          <div className="n">Farzad Marzban</div>
+          <div className="n">{user ? user.username : 'User'}</div>
           <div className="r">Admin | CIC</div>
         </div>
         <div className="spacer"></div>

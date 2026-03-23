@@ -17,7 +17,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const success = login(username, password);
+      const success = await login(username, password);
 
       if (success) {
         router.push("/");
