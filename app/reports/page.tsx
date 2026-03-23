@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Pi360 - Reports",
+  title: "PI360 - Reports",
   description: "Generate and view reports",
 };
 

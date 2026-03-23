@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Pi360 - Facilities",
+  title: "PI360 - Facilities",
   description: "Manage facility information",
 };
 

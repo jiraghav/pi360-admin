@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Pi360 - Workspace",
+  title: "PI360 - Workspace",
   description: "Manage workspace",
 };
 
@@ -176,35 +176,42 @@ export default function DashboardPage() {
                 <button className="mini">View all</button>
                 <span className="hint">Filtered</span>
               </div>
-              <div
-                id="wsNotesList"
-                className="grid"
-                style={{ gap: "10px" }}
-              >
-<div className="note">
-          <div className="h">
-            <div className="t">Pharmacy</div>
-            <div className="m">03/05/2026 09:01 AM</div>
-          </div>
-          <div className="p">Sent patient in case of reminder: REFERRAL_PENDING_REPORT_FROM_FACILITY to cic: OLYMPIA_PHARMACY</div>
-        </div>
+              <div id="wsNotesList" className="grid" style={{ gap: "10px" }}>
+                <div className="note">
+                  <div className="h">
+                    <div className="t">Pharmacy</div>
+                    <div className="m">03/05/2026 09:01 AM</div>
+                  </div>
+                  <div className="p">
+                    Sent patient in case of reminder:
+                    REFERRAL_PENDING_REPORT_FROM_FACILITY to cic:
+                    OLYMPIA_PHARMACY
+                  </div>
+                </div>
 
-        <div className="note">
-          <div className="h">
-            <div className="t">Medical Consults</div>
-            <div className="m">03/05/2026 09:00 AM</div>
-          </div>
-          <div className="p">Sent patient in auto treatment status request to clinic: drmarzban@gmail.com</div>
-        </div>
+                <div className="note">
+                  <div className="h">
+                    <div className="t">Medical Consults</div>
+                    <div className="m">03/05/2026 09:00 AM</div>
+                  </div>
+                  <div className="p">
+                    Sent patient in auto treatment status request to clinic:
+                    drmarzban@gmail.com
+                  </div>
+                </div>
 
-        <div className="note">
-          <div className="h">
-            <div className="t">Chiropractic / Therapy</div>
-            <div className="m">03/02/2026 12:45 PM</div>
-          </div>
-          <div className="p">Patient: I have to reschedule. I had a death in the family this morning and have to go to Austin. Will text when I get back next week. (Notified Clinic) - Sent to: farshidmarzban1@gmail.com</div>
-        </div>
-
+                <div className="note">
+                  <div className="h">
+                    <div className="t">Chiropractic / Therapy</div>
+                    <div className="m">03/02/2026 12:45 PM</div>
+                  </div>
+                  <div className="p">
+                    Patient: I have to reschedule. I had a death in the family
+                    this morning and have to go to Austin. Will text when I get
+                    back next week. (Notified Clinic) - Sent to:
+                    farshidmarzban1@gmail.com
+                  </div>
+                </div>
               </div>
             </div>
           </div>

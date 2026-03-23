@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Pi360 - Patients",
+  title: "PI360 - Patients",
   description: "Manage and view patient records",
 };
 

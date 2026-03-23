@@ -8,8 +8,26 @@ export default function Sidebar() {
 
   const isActive = (route: string) => path.includes(route);
 
+  const closeMobileSidebar = () => {
+    const sidebar = document.querySelector(".sidebar");
+    const overlay = document.querySelector(".sidebar-overlay");
+    if (sidebar && overlay) {
+      sidebar.classList.remove("mobile-open");
+      overlay.classList.remove("open");
+    }
+  };
+
   return (
     <aside className="sidebar">
+      {/* Mobile Close Button */}
+      <button
+        className="mobile-close-btn"
+        onClick={closeMobileSidebar}
+        title="Close Menu"
+      >
+        ✕
+      </button>
+
       {/* Brand */}
       <div className="brandbar">
         <div className="logo"></div>
@@ -21,10 +39,10 @@ export default function Sidebar() {
 
       {/* Actions */}
       <div className="side-actions">
-        <button className="pillbtn">
+        <button className="pillbtn" onClick={closeMobileSidebar}>
           📝 <span>New Note</span>
         </button>
-        <button className="pillbtn">
+        <button className="pillbtn" onClick={closeMobileSidebar}>
           🔎 <span>Search</span>
         </button>
       </div>
@@ -36,6 +54,7 @@ export default function Sidebar() {
         <Link
           href="/dashboard"
           className={isActive("dashboard") ? "active" : ""}
+          onClick={closeMobileSidebar}
         >
           <div className="ico">🏠</div>
           <div>Dashboard</div>
@@ -46,7 +65,11 @@ export default function Sidebar() {
           </div>
         </Link>
 
-        <Link href="/patients" className={isActive("patients") ? "active" : ""}>
+        <Link
+          href="/patients"
+          className={isActive("patients") ? "active" : ""}
+          onClick={closeMobileSidebar}
+        >
           <div className="ico">🧑‍⚕️</div>
           <div>Patients</div>
           <div className="meta">
@@ -59,6 +82,7 @@ export default function Sidebar() {
         <Link
           href="/workspace"
           className={isActive("workspace") ? "active" : ""}
+          onClick={closeMobileSidebar}
         >
           <div className="ico">🧾</div>
           <div>Patient Workspace</div>
@@ -72,6 +96,7 @@ export default function Sidebar() {
         <Link
           href="/facilities"
           className={isActive("facilities") ? "active" : ""}
+          onClick={closeMobileSidebar}
         >
           <div className="ico">🏥</div>
           <div>Facilities</div>
@@ -80,7 +105,11 @@ export default function Sidebar() {
           </div>
         </Link>
 
-        <Link href="/emails" className={isActive("emails") ? "active" : ""}>
+        <Link
+          href="/emails"
+          className={isActive("emails") ? "active" : ""}
+          onClick={closeMobileSidebar}
+        >
           <div className="ico">✉️</div>
           <div>Email Templates</div>
           <div className="meta">
@@ -88,7 +117,11 @@ export default function Sidebar() {
           </div>
         </Link>
 
-        <Link href="/reports" className={isActive("reports") ? "active" : ""}>
+        <Link
+          href="/reports"
+          className={isActive("reports") ? "active" : ""}
+          onClick={closeMobileSidebar}
+        >
           <div className="ico">📄</div>
           <div>Reports</div>
           <div className="meta">
@@ -98,7 +131,11 @@ export default function Sidebar() {
 
         <div className="group-label">Admin</div>
 
-        <Link href="/settings" className={isActive("settings") ? "active" : ""}>
+        <Link
+          href="/settings"
+          className={isActive("settings") ? "active" : ""}
+          onClick={closeMobileSidebar}
+        >
           <div className="ico">⚙️</div>
           <div>Settings</div>
           <div className="meta">

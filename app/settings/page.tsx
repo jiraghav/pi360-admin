@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Pi360 - Settings",
+  title: "PI360 - Settings",
   description: "Configure system settings",
 };
 
