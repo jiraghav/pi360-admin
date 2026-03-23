@@ -3,7 +3,7 @@ export const metadata = {
   description: "Manage facility information",
 };
 
-export default function DashboardPage() {
+export default function FacilitiesPage() {
   return (
     <section>
       <div className="card">

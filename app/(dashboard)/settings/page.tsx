@@ -3,7 +3,7 @@ export const metadata = {
   description: "Configure system settings",
 };
 
-export default function DashboardPage() {
+export default function SettingsPage() {
   return (
     <section>
       <div className="card">

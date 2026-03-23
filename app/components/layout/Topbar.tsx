@@ -43,17 +43,6 @@ export default function Topbar() {
   const pathname = usePathname();
   const config = pageConfig[pathname] || pageConfig["/"];
 
-  const toggleSearch = () => {
-    const searchbar = document.querySelector(".searchbar") as HTMLElement;
-    if (searchbar) {
-      if (searchbar.style.display === "flex") {
-        searchbar.style.display = "none";
-      } else {
-        searchbar.style.display = "flex";
-      }
-    }
-  };
-
   return (
     <>
       <div className="topbar">
@@ -63,20 +52,18 @@ export default function Topbar() {
         </div>
 
         <div className="searchbar">
-          🔎
+          🔎{" "}
           <input placeholder="Search patient, facility, claim, template..." />
         </div>
 
         <div className="top-actions">
-          <button className="btn secondary" title="Open EMR">
+          <button className="btn secondary">
             🧾 <span>Open EMR</span>
           </button>
-          <button className="btn" title="New Task">
+          <button className="btn">
             ➕ <span>New Task</span>
           </button>
-          <button className="iconbtn" title="Notifications">
-            🔔
-          </button>
+          <button className="iconbtn">🔔</button>
         </div>
       </div>
       <div className="notif-strip">

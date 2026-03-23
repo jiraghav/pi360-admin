@@ -3,7 +3,7 @@ export const metadata = {
   description: "Email communications",
 };
 
-export default function DashboardPage() {
+export default function EmailsPage() {
   return (
     <section>
       <div className="card">

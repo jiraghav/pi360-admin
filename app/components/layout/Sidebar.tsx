@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export default function Sidebar() {
+interface SidebarProps {
+  onLogout?: () => void;
+}
+
+export default function Sidebar({ onLogout }: SidebarProps) {
   const path = usePathname();
 
   const isActive = (route: string) => path.includes(route);
@@ -45,6 +49,14 @@ export default function Sidebar() {
         <button className="pillbtn" onClick={closeMobileSidebar}>
           🔎 <span>Search</span>
         </button>
+        {onLogout && (
+          <button
+            className="pillbtn text-red-600 hover:text-red-700"
+            onClick={onLogout}
+          >
+            🚪 <span>Logout</span>
+          </button>
+        )}
       </div>
 
       {/* Navigation */}

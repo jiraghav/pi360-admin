@@ -2,16 +2,17 @@
 
 import { useState } from "react";
 
-export default function EmrTopnav() {
+interface EmrTopnavProps {
+  onLogout?: () => void;
+}
+
+export default function EmrTopnav({ onLogout }: EmrTopnavProps) {
   const [open, setOpen] = useState(false);
 
   return (
     <div className="emr-topnav">
       <div className="nav-cluster">
-        <div
-          className="nav-item active"
-          onClick={() => setOpen(!open)}
-        >
+        <div className="nav-item active" onClick={() => setOpen(!open)}>
           Administration
           <span className="caret">▾</span>
         </div>
@@ -21,11 +22,27 @@ export default function EmrTopnav() {
       </div>
 
       <div className="nav-cluster">
-    <div className="nav-item" data-navgo="reports">Reports</div>
-    <div className="nav-item" data-navgo="misc">Miscellaneous</div>
-    <div className="nav-item" data-navgo="revenue">Revenue</div>
-    <div className="nav-item" data-navgo="about">About</div>
-  </div>
+        <div className="nav-item" data-navgo="reports">
+          Reports
+        </div>
+        <div className="nav-item" data-navgo="misc">
+          Miscellaneous
+        </div>
+        <div className="nav-item" data-navgo="revenue">
+          Revenue
+        </div>
+        <div className="nav-item" data-navgo="about">
+          About
+        </div>
+        {onLogout && (
+          <button
+            className="nav-item cursor-pointer text-red-600 hover:text-red-700"
+            onClick={onLogout}
+          >
+            Logout
+          </button>
+        )}
+      </div>
 
       {open && (
         <div className="admin-dd">

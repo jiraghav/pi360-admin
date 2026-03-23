@@ -3,7 +3,7 @@ export const metadata = {
   description: "Manage and view patient records",
 };
 
-export default function DashboardPage() {
+export default function PatientsPage() {
   return (
     <section>
       <div className="card">

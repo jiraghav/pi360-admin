@@ -3,7 +3,7 @@ export const metadata = {
   description: "Generate and view reports",
 };
 
-export default function DashboardPage() {
+export default function ReportsPage() {
   return (
     <section>
       <div className="grid">

@@ -3,7 +3,7 @@ export const metadata = {
   description: "Manage workspace",
 };
 
-export default function DashboardPage() {
+export default function WorkspacePage() {
   return (
     <section>
       <div className="workspace-header">
