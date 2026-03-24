@@ -29,6 +29,10 @@ export interface NeedsUpdatePatientsPage {
   pagination: NeedsUpdatePagination;
 }
 
+interface ApiEnvelope {
+  data?: unknown;
+}
+
 interface NeedsUpdateQueryOptions {
   page?: number;
   pageSize?: number;
@@ -171,13 +175,13 @@ const mapDashboardSummary = (payload: unknown): DashboardSummary => {
 };
 
 export async function getDashboardSummary(): Promise<DashboardSummary> {
-  const response = await apiRequest<unknown>("dashboard.php", {
+  const response = await apiRequest<ApiEnvelope>("dashboard.php", {
     method: "GET",
     withAuth: true,
     cache: "no-store",
   });
 
-  return mapDashboardSummary(response?.data);
+  return mapDashboardSummary(response.data);
 }
 
 export async function getNeedsUpdatePatientsPage(
@@ -191,13 +195,13 @@ export async function getNeedsUpdatePatientsPage(
     pageSize: String(pageSize),
   });
 
-  const response = await apiRequest<unknown>(`needs_update_patients.php?${query.toString()}`, {
+  const response = await apiRequest<ApiEnvelope>(`needs_update_patients.php?${query.toString()}`, {
     method: "GET",
     withAuth: true,
     cache: "no-store",
   });
 
-  const data = response?.data;
+  const data = response.data;
 
   return {
     patients: mapNeedsUpdatePatients(data),
