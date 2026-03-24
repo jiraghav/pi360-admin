@@ -40,6 +40,21 @@ export interface SavePatientDemographicsInput {
   doi: string;
 }
 
+export interface SavePatientVisitsBillingInput {
+  pid: number;
+  lastVisit: string;
+  initialVisit?: string;
+  nextVisit: string;
+  missedVisit?: string;
+  visits?: string;
+  schedule?: string;
+  referralsReceived?: string;
+  referralsSent?: string;
+  profileUpToDate?: boolean;
+  balance: string;
+  action?: "save" | "save_share";
+}
+
 interface ApiEnvelope {
   data?: unknown;
 }
@@ -49,6 +64,8 @@ interface GetPatientsPageOptions {
   pageSize?: number;
   search?: string;
 }
+
+type PatientPatch = Partial<PatientListItem>;
 
 const fallbackPagination: PatientsPagination = {
   page: 1,
@@ -138,12 +155,61 @@ const mapPatients = (payload: unknown): PatientListItem[] => {
   });
 };
 
-const mapPatient = (payload: unknown): PatientListItem | null => {
-  const patients = mapPatients({
-    patients: payload ? [payload] : [],
-  });
+const mapPatientPatch = (payload: unknown): PatientPatch | null => {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
 
-  return patients[0] ?? null;
+  const row = payload as Record<string, unknown>;
+  const patch: PatientPatch = {};
+
+  if ("pid" in row) {
+    patch.pid = row.pid == null ? null : toNumber(row.pid, 0);
+  }
+  if ("uuid" in row) {
+    patch.uuid = toNullableString(row.uuid);
+  }
+  if ("name" in row) {
+    patch.name = typeof row.name === "string" ? row.name : "";
+  }
+  if ("facilityId" in row) {
+    patch.facilityId = row.facilityId == null ? null : toNumber(row.facilityId, 0);
+  }
+  if ("dob" in row) {
+    patch.dob = toNullableString(row.dob);
+  }
+  if ("doi" in row) {
+    patch.doi = toNullableString(row.doi);
+  }
+  if ("lastUpdated" in row) {
+    patch.lastUpdated = toNullableString(row.lastUpdated);
+  }
+  if ("lastVisit" in row) {
+    patch.lastVisit = toNullableString(row.lastVisit);
+  }
+  if ("nextVisit" in row) {
+    patch.nextVisit = toNullableString(row.nextVisit);
+  }
+  if ("phone" in row) {
+    patch.phone = toNullableString(row.phone);
+  }
+  if ("email" in row) {
+    patch.email = toNullableString(row.email);
+  }
+  if ("balance" in row) {
+    patch.balance = toNumber(row.balance, 0);
+  }
+  if ("facility" in row) {
+    patch.facility = toNullableString(row.facility);
+  }
+  if ("status" in row) {
+    patch.status = toNullableString(row.status);
+  }
+  if ("needsUpdate" in row) {
+    patch.needsUpdate = toBoolean(row.needsUpdate);
+  }
+
+  return patch;
 };
 
 const mapPagination = (payload: unknown): PatientsPagination => {
@@ -213,7 +279,7 @@ export async function getPatientsPage(
 
 export async function savePatientDemographics(
   input: SavePatientDemographicsInput,
-): Promise<{ patient: PatientListItem | null; message: string }> {
+): Promise<{ patient: PatientPatch | null; message: string }> {
   const response = await apiRequest<ApiEnvelope>("update_patient_demographics.php", {
     method: "POST",
     withAuth: true,
@@ -226,7 +292,27 @@ export async function savePatientDemographics(
     : {};
 
   return {
-    patient: mapPatient(payload.patient),
+    patient: mapPatientPatch(payload.patient),
     message: typeof payload.message === "string" ? payload.message : "Patient demographics saved.",
+  };
+}
+
+export async function savePatientVisitsBilling(
+  input: SavePatientVisitsBillingInput,
+): Promise<{ patient: PatientPatch | null; message: string }> {
+  const response = await apiRequest<ApiEnvelope>("update_patient_visits_billing.php", {
+    method: "POST",
+    withAuth: true,
+    cache: "no-store",
+    body: input,
+  });
+
+  const payload = response.data && typeof response.data === "object"
+    ? (response.data as Record<string, unknown>)
+    : {};
+
+  return {
+    patient: mapPatientPatch(payload.patient),
+    message: typeof payload.message === "string" ? payload.message : "Visits and billing saved.",
   };
 }

@@ -6,6 +6,7 @@ import { getFacilities, type FacilityOption } from "@/lib/facilities";
 import {
   getPatientsPage,
   savePatientDemographics,
+  savePatientVisitsBilling,
   type PatientListItem,
   type PatientsPagination,
 } from "@/lib/patients";
@@ -37,6 +38,13 @@ interface PatientDemographicsDraft {
   facilityName: string;
   dob: string;
   doi: string;
+}
+
+interface PatientVisitsBillingDraft {
+  lastVisit: string;
+  nextVisit: string;
+  balance: string;
+  paymentStatus: string;
 }
 
 function formatDate(value: string | null) {
@@ -129,6 +137,15 @@ function createDemographicsDraft(patient: PatientListItem): PatientDemographicsD
   };
 }
 
+function createVisitsBillingDraft(patient: PatientListItem): PatientVisitsBillingDraft {
+  return {
+    lastVisit: toDateInputValue(patient.lastVisit),
+    nextVisit: toDateInputValue(patient.nextVisit),
+    balance: String(patient.balance ?? 0),
+    paymentStatus: patient.balance > 0 ? "Balance due" : "Paid",
+  };
+}
+
 export default function PatientsPageClient() {
   const [patients, setPatients] = useState<PatientListItem[]>([]);
   const [pagination, setPagination] = useState<PatientsPagination>(fallbackPagination);
@@ -138,7 +155,9 @@ export default function PatientsPageClient() {
   const [facilities, setFacilities] = useState<FacilityOption[]>([]);
   const [facilityError, setFacilityError] = useState("");
   const [patientDrafts, setPatientDrafts] = useState<Record<string, PatientDemographicsDraft>>({});
+  const [patientVisitsDrafts, setPatientVisitsDrafts] = useState<Record<string, PatientVisitsBillingDraft>>({});
   const [saveStateByPatient, setSaveStateByPatient] = useState<Record<string, { status: "idle" | "saving" | "saved" | "error"; message: string }>>({});
+  const [visitsSaveStateByPatient, setVisitsSaveStateByPatient] = useState<Record<string, { status: "idle" | "saving" | "saved" | "error"; message: string }>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -227,6 +246,18 @@ export default function PatientsPageClient() {
 
           return nextDrafts;
         });
+        setPatientVisitsDrafts((current) => {
+          const nextDrafts = { ...current };
+
+          for (const patient of data.patients) {
+            const key = String(getPatientKey(patient));
+            if (!nextDrafts[key]) {
+              nextDrafts[key] = createVisitsBillingDraft(patient);
+            }
+          }
+
+          return nextDrafts;
+        });
       } catch (err) {
         console.error("Failed to load patients:", err);
 
@@ -288,6 +319,22 @@ export default function PatientsPageClient() {
 
     handleDraftChange(patient, "facilityName", facilityName);
     handleDraftChange(patient, "facilityId", facilityId);
+  };
+
+  const handleVisitsDraftChange = (
+    patient: PatientListItem,
+    field: keyof PatientVisitsBillingDraft,
+    value: string,
+  ) => {
+    const patientKey = String(getPatientKey(patient));
+
+    setPatientVisitsDrafts((current) => ({
+      ...current,
+      [patientKey]: {
+        ...(current[patientKey] ?? createVisitsBillingDraft(patient)),
+        [field]: value,
+      },
+    }));
   };
 
   const handleSaveDemographics = async (patient: PatientListItem) => {
@@ -352,6 +399,74 @@ export default function PatientsPageClient() {
         [patientKey]: {
           status: "error",
           message: "Unable to save demographics right now.",
+        },
+      }));
+    }
+  };
+
+  const handleSaveVisitsBilling = async (patient: PatientListItem) => {
+    if (!patient.pid) {
+      return;
+    }
+
+    const patientKey = String(getPatientKey(patient));
+    const draft = patientVisitsDrafts[patientKey] ?? createVisitsBillingDraft(patient);
+
+    setVisitsSaveStateByPatient((current) => ({
+      ...current,
+      [patientKey]: {
+        status: "saving",
+        message: "Saving visits and billing...",
+      },
+    }));
+
+    try {
+      const result = await savePatientVisitsBilling({
+        pid: patient.pid,
+        lastVisit: draft.lastVisit,
+        nextVisit: draft.nextVisit,
+        balance: draft.balance,
+      });
+
+      if (result.patient) {
+        setPatients((current) =>
+          current.map((item) =>
+            item.pid === patient.pid
+              ? {
+                  ...item,
+                  ...result.patient,
+                }
+              : item,
+          ),
+        );
+
+        setPatientVisitsDrafts((current) => ({
+          ...current,
+          [patientKey]: {
+            ...(current[patientKey] ?? createVisitsBillingDraft(patient)),
+            ...createVisitsBillingDraft({
+              ...patient,
+              ...result.patient,
+            }),
+            paymentStatus: draft.paymentStatus,
+          },
+        }));
+      }
+
+      setVisitsSaveStateByPatient((current) => ({
+        ...current,
+        [patientKey]: {
+          status: "saved",
+          message: result.message,
+        },
+      }));
+    } catch (err) {
+      console.error("Failed to save visits and billing:", err);
+      setVisitsSaveStateByPatient((current) => ({
+        ...current,
+        [patientKey]: {
+          status: "error",
+          message: "Unable to save visits and billing right now.",
         },
       }));
     }
@@ -430,7 +545,12 @@ export default function PatientsPageClient() {
                 {(() => {
                   const patientKey = getPatientKey(patient);
                   const draft = patientDrafts[String(patientKey)] ?? createDemographicsDraft(patient);
+                  const visitsDraft = patientVisitsDrafts[String(patientKey)] ?? createVisitsBillingDraft(patient);
                   const saveState = saveStateByPatient[String(patientKey)] ?? {
+                    status: "idle" as const,
+                    message: "",
+                  };
+                  const visitsSaveState = visitsSaveStateByPatient[String(patientKey)] ?? {
                     status: "idle" as const,
                     message: "",
                   };
@@ -583,19 +703,36 @@ export default function PatientsPageClient() {
                         <div className="two-col">
                           <div className="field">
                             <label>Last visit</label>
-                            <input defaultValue={formatDate(patient.lastVisit)} />
+                            <input
+                              type="date"
+                              value={visitsDraft.lastVisit}
+                              onChange={(event) => handleVisitsDraftChange(patient, "lastVisit", event.target.value)}
+                            />
                           </div>
                           <div className="field">
                             <label>Next visit</label>
-                            <input defaultValue={formatDate(patient.nextVisit)} />
+                            <input
+                              type="date"
+                              value={visitsDraft.nextVisit}
+                              onChange={(event) => handleVisitsDraftChange(patient, "nextVisit", event.target.value)}
+                            />
                           </div>
                           <div className="field">
                             <label>Current bill amount</label>
-                            <input defaultValue={currencyFormatter.format(patient.balance)} />
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={visitsDraft.balance}
+                              onChange={(event) => handleVisitsDraftChange(patient, "balance", event.target.value)}
+                            />
                           </div>
                           <div className="field">
                             <label>Payment status</label>
-                            <select defaultValue={patient.balance > 0 ? "Balance due" : "Paid"}>
+                            <select
+                              value={visitsDraft.paymentStatus}
+                              onChange={(event) => handleVisitsDraftChange(patient, "paymentStatus", event.target.value)}
+                            >
                               <option>Balance due</option>
                               <option>Paid</option>
                               <option>In review</option>
@@ -603,12 +740,30 @@ export default function PatientsPageClient() {
                           </div>
                         </div>
                         <div className="hint" style={{ marginTop: "8px" }}>
-                          Affiliates update: last visit + next visit + bill amount + upload any records if applicable.
+                          Visits, next visit, and current bill amount are saved to the backend. Payment status remains a UI helper here.
                         </div>
                         <div className="actions-row">
-                          <button className="mini primary" type="button">Save updates</button>
+                          <button
+                            className="mini primary"
+                            type="button"
+                            disabled={visitsSaveState.status === "saving"}
+                            onClick={() => handleSaveVisitsBilling(patient)}
+                          >
+                            {visitsSaveState.status === "saving" ? "Saving..." : "Save updates"}
+                          </button>
                           <button className="mini" type="button">Upload doc</button>
                         </div>
+                        {visitsSaveState.message && (
+                          <div
+                            className="hint"
+                            style={{
+                              marginTop: "8px",
+                              color: visitsSaveState.status === "error" ? "var(--bad)" : undefined,
+                            }}
+                          >
+                            {visitsSaveState.message}
+                          </div>
+                        )}
                       </div>
 
                       <div className="softbox">
