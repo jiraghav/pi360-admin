@@ -1530,7 +1530,8 @@
     }
 
     .patients-primary,
-    .patients-actions {
+    .patients-actions,
+    .patients-facility {
       grid-column: 1 / -1;
     }
 
@@ -1539,6 +1540,10 @@
       flex-direction: column;
       align-items: flex-start;
       gap: 6px;
+    }
+
+    .patients-facility {
+      display: block !important;
     }
 
     .patients-actions {
