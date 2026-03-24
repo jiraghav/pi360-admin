@@ -114,13 +114,15 @@ export default function DashboardClient() {
       );
 
   return (
-    <section>
-      <div className="grid">
+    <section className="dashboard-page">
+      <div className="grid dashboard-grid">
         <div className="card">
-          <div className="hd">
-            <div className="title">Today at a glance</div>
-            <div className="sub">What needs attention</div>
-            <div className="right">
+          <div className="hd dashboard-card-head">
+            <div className="dashboard-card-copy">
+              <div className="title">Today at a glance</div>
+              <div className="sub">What needs attention</div>
+            </div>
+            <div className="right dashboard-card-actions">
               <span className="chip warn">
                 {summaryLoading ? "..." : summary.needsUpdate} needs update
               </span>
@@ -136,7 +138,7 @@ export default function DashboardClient() {
                 {error} Showing fallback values.
               </div>
             )}
-            <div className="kpi-row">
+            <div className="kpi-row dashboard-kpi-row">
               <div className="kpi">
                 <div className="k">Active patients</div>
                 <div className="v">
@@ -163,7 +165,7 @@ export default function DashboardClient() {
               </div>
             </div>
             <div className="hr"></div>
-            <div className="three-col">
+            <div className="three-col dashboard-info-grid">
               <div className="softbox">
                 <div style={{ fontWeight: 950 }}>Fast Actions</div>
                 <div className="hint" style={{ marginTop: "6px" }}>
@@ -212,10 +214,12 @@ export default function DashboardClient() {
           </div>
         </div>
         <div className="card">
-          <div className="hd">
-            <div className="title">Needs update</div>
-            <div className="sub">Blinking indicator for affiliates</div>
-            <div className="right">
+          <div className="hd dashboard-card-head">
+            <div className="dashboard-card-copy">
+              <div className="title">Needs update</div>
+              <div className="sub">Blinking indicator for affiliates</div>
+            </div>
+            <div className="right dashboard-card-actions">
               <Link className="mini primary" href="/patients" style={{ textDecoration: "none" }}>
                 Review
               </Link>
@@ -224,12 +228,7 @@ export default function DashboardClient() {
           <div className="bd">
             <div
               id="dashNeedsList"
-              className="grid"
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-                gap: "10px",
-              }}
+              className="grid dashboard-needs-list"
             >
               {needsLoading && needsUpdatePatients.length === 0 && (
                 <div className="softbox hint">Loading needs update patients...</div>
@@ -272,12 +271,12 @@ export default function DashboardClient() {
                 </div>
               ))}
             </div>
-            <div className="row" style={{ marginTop: "10px" }}>
+            <div className="row wrap dashboard-pagination-row" style={{ marginTop: "10px" }}>
               <div className="hint">
                 Showing {needsStart}-{needsEnd} of {needsUpdatePagination.totalItems}
               </div>
               <div className="spacer" />
-              <div className="hint">
+              <div className="hint dashboard-pagination-meta">
                 Page {needsUpdatePagination.page} of {needsUpdatePagination.totalPages}
               </div>
               <button

@@ -1186,6 +1186,50 @@
     background: rgba(255, 255, 255, .90);
   }
 
+  /* Dashboard */
+  .dashboard-card-head {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .dashboard-card-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .dashboard-card-copy .sub {
+    margin-left: 0 !important;
+  }
+
+  .dashboard-card-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .dashboard-kpi-row {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+
+  .dashboard-info-grid {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+
+  .dashboard-needs-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 10px;
+  }
+
+  .dashboard-pagination-row {
+    justify-content: flex-end;
+  }
+
+  .dashboard-pagination-meta {
+    white-space: nowrap;
+  }
+
   /* Responsive */
   @media (max-width: 1100px) {
     .app {
@@ -1233,6 +1277,10 @@
     .two-col,
     .three-col {
       grid-template-columns: 1fr
+    }
+
+    .dashboard-needs-list {
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     }
   }
 
@@ -1335,6 +1383,24 @@
     .toolbar .search-mini {
       min-width: 100% !important;
       flex: 0 !important
+    }
+
+    .dashboard-card-head {
+      flex-direction: column;
+    }
+
+    .dashboard-card-actions {
+      margin-left: 0 !important;
+      width: 100%;
+      justify-content: flex-start;
+    }
+
+    .dashboard-pagination-row {
+      justify-content: flex-start;
+    }
+
+    .dashboard-pagination-row .spacer {
+      display: none;
     }
   }
 
@@ -1509,6 +1575,43 @@
     .toolbar .search-mini {
       min-width: auto;
       flex: 1
+    }
+
+    .dashboard-page .grid {
+      gap: 10px;
+    }
+
+    .dashboard-kpi-row {
+      grid-template-columns: 1fr;
+    }
+
+    .dashboard-info-grid,
+    .dashboard-needs-list {
+      grid-template-columns: 1fr;
+    }
+
+    .dashboard-card-actions {
+      gap: 6px;
+    }
+
+    .dashboard-card-actions .mini,
+    .dashboard-card-actions .chip {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .dashboard-pagination-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      align-items: stretch;
+    }
+
+    .dashboard-pagination-row .hint {
+      grid-column: 1 / -1;
+    }
+
+    .dashboard-pagination-meta {
+      white-space: normal;
     }
 
     body {
