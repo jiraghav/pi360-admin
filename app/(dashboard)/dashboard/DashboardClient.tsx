@@ -144,7 +144,7 @@ export default function DashboardClient() {
               <span className="chip warn">
                 {summaryLoading ? "..." : summary.needsUpdate} needs update
               </span>
-              <span className="chip">{summary.newNotes} new notes</span>
+              <span className="chip">{summaryLoading ? "..." : summary.newNotes} new notes</span>
               <Link className="mini primary" href="/patients" style={{ textDecoration: "none" }}>
                 Go to Patients
               </Link>
