@@ -4,6 +4,7 @@ export interface PatientListItem {
   pid: number | null;
   uuid: string | null;
   name: string;
+  facilityId: number | null;
   dob: string | null;
   doi: string | null;
   lastUpdated: string | null;
@@ -27,6 +28,16 @@ export interface PatientsPagination {
 export interface PatientsPage {
   patients: PatientListItem[];
   pagination: PatientsPagination;
+}
+
+export interface SavePatientDemographicsInput {
+  pid: number;
+  name: string;
+  phone: string;
+  email: string;
+  facilityId: number | null;
+  dob: string;
+  doi: string;
 }
 
 interface ApiEnvelope {
@@ -111,6 +122,7 @@ const mapPatients = (payload: unknown): PatientListItem[] => {
       pid: row.pid == null ? null : toNumber(row.pid, 0),
       uuid: toNullableString(row.uuid),
       name: typeof row.name === "string" ? row.name : "",
+      facilityId: row.facilityId == null ? null : toNumber(row.facilityId, 0),
       dob: toNullableString(row.dob),
       doi: toNullableString(row.doi),
       lastUpdated: toNullableString(row.lastUpdated),
@@ -124,6 +136,14 @@ const mapPatients = (payload: unknown): PatientListItem[] => {
       needsUpdate: toBoolean(row.needsUpdate),
     };
   });
+};
+
+const mapPatient = (payload: unknown): PatientListItem | null => {
+  const patients = mapPatients({
+    patients: payload ? [payload] : [],
+  });
+
+  return patients[0] ?? null;
 };
 
 const mapPagination = (payload: unknown): PatientsPagination => {
@@ -188,5 +208,25 @@ export async function getPatientsPage(
   return {
     patients: mapPatients(response.data),
     pagination: mapPagination(response.data),
+  };
+}
+
+export async function savePatientDemographics(
+  input: SavePatientDemographicsInput,
+): Promise<{ patient: PatientListItem | null; message: string }> {
+  const response = await apiRequest<ApiEnvelope>("update_patient_demographics.php", {
+    method: "POST",
+    withAuth: true,
+    cache: "no-store",
+    body: input,
+  });
+
+  const payload = response.data && typeof response.data === "object"
+    ? (response.data as Record<string, unknown>)
+    : {};
+
+  return {
+    patient: mapPatient(payload.patient),
+    message: typeof payload.message === "string" ? payload.message : "Patient demographics saved.",
   };
 }

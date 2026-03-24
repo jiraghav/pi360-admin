@@ -80,11 +80,11 @@ export default function Sidebar({ onLogout }: SidebarProps) {
         >
           <div className="ico">🏠</div>
           <div>Dashboard</div>
-          <div className="meta">
+          {/* <div className="meta">
             <span className="badge blue" id="badgeWork">
               15
             </span>
-          </div>
+          </div> */}
         </Link>
 
         <Link
@@ -94,11 +94,11 @@ export default function Sidebar({ onLogout }: SidebarProps) {
         >
           <div className="ico">🧑‍⚕️</div>
           <div>Patients</div>
-          <div className="meta">
+          {/* <div className="meta">
             <span className="badge red" id="badgeNeeds">
               3
             </span>
-          </div>
+          </div> */}
         </Link>
 
         <Link
@@ -108,9 +108,9 @@ export default function Sidebar({ onLogout }: SidebarProps) {
         >
           <div className="ico">🧾</div>
           <div>Patient Workspace</div>
-          <div className="meta">
+          {/* <div className="meta">
             <span className="badge">EMR</span>
-          </div>
+          </div> */}
         </Link>
 
         <div className="group-label">Operations</div>
@@ -122,9 +122,9 @@ export default function Sidebar({ onLogout }: SidebarProps) {
         >
           <div className="ico">🏥</div>
           <div>Facilities</div>
-          <div className="meta">
+          {/* <div className="meta">
             <span className="badge">42</span>
-          </div>
+          </div> */}
         </Link>
 
         <Link
@@ -134,9 +134,9 @@ export default function Sidebar({ onLogout }: SidebarProps) {
         >
           <div className="ico">✉️</div>
           <div>Email Templates</div>
-          <div className="meta">
+          {/* <div className="meta">
             <span className="badge">271</span>
-          </div>
+          </div> */}
         </Link>
 
         <Link
@@ -146,9 +146,9 @@ export default function Sidebar({ onLogout }: SidebarProps) {
         >
           <div className="ico">📄</div>
           <div>Reports</div>
-          <div className="meta">
+          {/* <div className="meta">
             <span className="badge green">Ready</span>
-          </div>
+          </div> */}
         </Link>
 
         <div className="group-label">Admin</div>
@@ -160,9 +160,9 @@ export default function Sidebar({ onLogout }: SidebarProps) {
         >
           <div className="ico">⚙️</div>
           <div>Settings</div>
-          <div className="meta">
+          {/* <div className="meta">
             <span className="badge">Beta</span>
-          </div>
+          </div> */}
         </Link>
       </nav>
 
