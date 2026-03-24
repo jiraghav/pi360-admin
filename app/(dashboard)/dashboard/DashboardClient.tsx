@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   getDashboardSummary,
   getNeedsUpdatePatientsPage,
@@ -33,6 +33,8 @@ export default function DashboardClient() {
     totalItems: 0,
     totalPages: 1,
   });
+  const needsCardRef = useRef<HTMLDivElement | null>(null);
+  const hasLoadedNeedsPageRef = useRef(false);
 
   useEffect(() => {
     const fetchSummary = async () => {
@@ -71,6 +73,22 @@ export default function DashboardClient() {
 
     fetchNeedsUpdate();
   }, [needsUpdatePage]);
+
+  useEffect(() => {
+    if (needsLoading) {
+      return;
+    }
+
+    if (!hasLoadedNeedsPageRef.current) {
+      hasLoadedNeedsPageRef.current = true;
+      return;
+    }
+
+    needsCardRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }, [needsLoading]);
 
   const currency = useMemo(
     () =>
@@ -213,7 +231,7 @@ export default function DashboardClient() {
             </div>
           </div>
         </div>
-        <div className="card">
+        <div className="card" ref={needsCardRef}>
           <div className="hd dashboard-card-head">
             <div className="dashboard-card-copy">
               <div className="title">Needs update</div>
