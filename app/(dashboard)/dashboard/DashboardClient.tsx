@@ -13,7 +13,7 @@ import {
 const defaultSummary: DashboardSummary = {
   activePatients: 0,
   unpaidBalance: 0,
-  weeklyUpdatesSent: 0,
+  totalSubmitted: 0,
   pendingReferrals: 0,
   needsUpdate: 0,
   newNotes: 0,
@@ -122,7 +122,7 @@ export default function DashboardClient() {
             <div className="sub">What needs attention</div>
             <div className="right">
               <span className="chip warn">
-                {summary.needsUpdate} needs update
+                {summaryLoading ? "..." : summary.needsUpdate} needs update
               </span>
               <span className="chip">{summary.newNotes} new notes</span>
               <Link className="mini primary" href="/patients" style={{ textDecoration: "none" }}>
@@ -150,9 +150,9 @@ export default function DashboardClient() {
                 </div>
               </div>
               <div className="kpi">
-                <div className="k">Weekly updates sent</div>
+                <div className="k">Total submitted</div>
                 <div className="v">
-                  {summaryLoading ? "..." : summary.weeklyUpdatesSent}
+                  {summaryLoading ? "..." : summary.totalSubmitted}
                 </div>
               </div>
               <div className="kpi">

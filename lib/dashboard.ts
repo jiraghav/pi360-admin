@@ -3,7 +3,7 @@
 export interface DashboardSummary {
   activePatients: number;
   unpaidBalance: number;
-  weeklyUpdatesSent: number;
+  totalSubmitted: number;
   pendingReferrals: number;
   needsUpdate: number;
   newNotes: number;
@@ -41,7 +41,7 @@ interface NeedsUpdateQueryOptions {
 const fallbackSummary: DashboardSummary = {
   activePatients: 0,
   unpaidBalance: 0,
-  weeklyUpdatesSent: 0,
+  totalSubmitted: 0,
   pendingReferrals: 0,
   needsUpdate: 0,
   newNotes: 0,
@@ -167,7 +167,7 @@ const mapDashboardSummary = (payload: unknown): DashboardSummary => {
   return {
     activePatients: pick(source, ["activePatients"], fallbackSummary.activePatients),
     unpaidBalance: pick(source, ["unpaidBalance"], fallbackSummary.unpaidBalance),
-    weeklyUpdatesSent: pick(source, ["weeklyUpdatesSent"], fallbackSummary.weeklyUpdatesSent),
+    totalSubmitted: pick(source, ["totalSubmitted"], fallbackSummary.totalSubmitted),
     pendingReferrals: pick(source, ["pendingReferrals"], fallbackSummary.pendingReferrals),
     needsUpdate: pick(source, ["needsUpdate"], fallbackSummary.needsUpdate),
     newNotes: pick(source, ["newNotes"], fallbackSummary.newNotes),
