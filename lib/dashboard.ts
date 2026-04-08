@@ -10,6 +10,7 @@ export interface DashboardSummary {
 }
 
 export interface NeedsUpdatePatient {
+  pid: number | null;
   name: string;
   dob: string | null;
   doi: string | null;
@@ -98,6 +99,7 @@ const mapNeedsUpdatePatients = (payload: unknown): NeedsUpdatePatient[] => {
   return rawPatients.map((item) => {
     const row = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
     return {
+      pid: row.pid == null ? null : toNumber(row.pid, 0),
       name: typeof row.name === "string" ? row.name : "",
       dob: typeof row.dob === "string" ? row.dob : null,
       doi: typeof row.doi === "string" ? row.doi : null,

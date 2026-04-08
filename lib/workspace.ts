@@ -47,7 +47,7 @@ export function createWorkspacePatientFromNeedsUpdate(
   patient: NeedsUpdatePatient,
 ): SelectedWorkspacePatient {
   return {
-    pid: null,
+    pid: patient.pid,
     uuid: null,
     name: patient.name,
     facilityId: null,

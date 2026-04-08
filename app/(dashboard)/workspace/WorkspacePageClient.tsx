@@ -1,14 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSelectedPatient } from "@/app/components/SelectedPatientProvider";
 import { getFacilities, type FacilityOption } from "@/lib/facilities";
+import {
+  createPatientProgressNote,
+  defaultProgressNotesListFilters,
+  defaultProgressNoteTags,
+  getPatientProgressNotes,
+  getPatientProgressNoteRecipientOptions,
+  type PatientProgressNote,
+  type ProgressNoteEmailSelection,
+  type ProgressNoteLawyerSelection,
+  type ProgressNotesListFilters,
+  type ProgressNotesPagination,
+  type ProgressNoteRecipientOptions,
+  type ProgressNoteTagState,
+} from "@/lib/progress-notes";
 import { savePatientDemographics } from "@/lib/patients";
 import {
   formatWorkspaceCurrency,
   formatWorkspaceDate,
-  formatWorkspacePhone,
 } from "@/lib/workspace";
 
 interface WorkspaceDemographicsDraft {
@@ -20,6 +33,28 @@ interface WorkspaceDemographicsDraft {
   dob: string;
   doi: string;
 }
+
+const fallbackNotesPagination: ProgressNotesPagination = {
+  page: 1,
+  pageSize: 20,
+  totalItems: 0,
+  totalPages: 1,
+};
+
+const progressNoteTypeLabels: Record<number, string> = {
+  1: "Urgent",
+  2: "Important - to clinic",
+  3: "Notify Lawyer",
+  4: "Notify Back Office",
+  5: "Notify Clinic Director",
+  6: "Admin only",
+  7: "Finance",
+  8: "Billing Notice",
+  11: "Add to treatment plan",
+  12: "Notify Intake",
+  13: "Notify Referrals",
+  15: "Notify Records",
+};
 
 function maskPhoneInput(value: string) {
   const digits = value.replace(/\D/g, "");
@@ -82,6 +117,34 @@ function createWorkspaceDemographicsDraft(
   };
 }
 
+function formatProgressNoteDate(value: string | null) {
+  if (!value) {
+    return "N/A";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "2-digit",
+    day: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(parsed);
+}
+
+type ProgressNoteModalType = "importantToClinic" | "notifyLawyer";
+
+interface ProgressNoteRecipientModalState {
+  type: ProgressNoteModalType;
+  selectedEmails: string[];
+  followEmailChain: boolean;
+  updateLawyerPortal: boolean;
+}
+
 export default function WorkspacePageClient() {
   const router = useRouter();
   const {
@@ -97,6 +160,28 @@ export default function WorkspacePageClient() {
   const [demographicsSaveError, setDemographicsSaveError] = useState(false);
   const [facilities, setFacilities] = useState<FacilityOption[]>([]);
   const [facilityError, setFacilityError] = useState("");
+  const [isAddNoteOpen, setIsAddNoteOpen] = useState(true);
+  const [isUpdatesOpen, setIsUpdatesOpen] = useState(true);
+  const previousPatientKeyRef = useRef<string | null>(null);
+  const [progressNoteText, setProgressNoteText] = useState("");
+  const [progressNoteTags, setProgressNoteTags] = useState<ProgressNoteTagState>(defaultProgressNoteTags());
+  const [progressNotes, setProgressNotes] = useState<PatientProgressNote[]>([]);
+  const [notesPagination, setNotesPagination] = useState<ProgressNotesPagination>(fallbackNotesPagination);
+  const [notesPage, setNotesPage] = useState(1);
+  const [progressNotesLoading, setProgressNotesLoading] = useState(false);
+  const [progressNotesError, setProgressNotesError] = useState("");
+  const [progressNotesMessage, setProgressNotesMessage] = useState("");
+  const [isSavingProgressNote, setIsSavingProgressNote] = useState(false);
+  const [noteFilter, setNoteFilter] = useState("");
+  const [noteFilterQuery, setNoteFilterQuery] = useState("");
+  const [notesListFilters, setNotesListFilters] = useState<ProgressNotesListFilters>(defaultProgressNotesListFilters());
+  const [recipientOptions, setRecipientOptions] = useState<ProgressNoteRecipientOptions | null>(null);
+  const [recipientOptionsLoading, setRecipientOptionsLoading] = useState(false);
+  const [recipientOptionsError, setRecipientOptionsError] = useState("");
+  const [importantToClinicSelection, setImportantToClinicSelection] = useState<ProgressNoteEmailSelection | null>(null);
+  const [notifyLawyerSelection, setNotifyLawyerSelection] = useState<ProgressNoteLawyerSelection | null>(null);
+  const [recipientModal, setRecipientModal] = useState<ProgressNoteRecipientModalState | null>(null);
+  const notesListRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!isHydrated) {
@@ -140,10 +225,148 @@ export default function WorkspacePageClient() {
       return;
     }
 
+    const nextPatientKey = String(
+      selectedPatient.pid ?? selectedPatient.uuid ?? selectedPatient.name,
+    );
+    const hasSwitchedPatient =
+      previousPatientKeyRef.current !== null && previousPatientKeyRef.current !== nextPatientKey;
+
+    previousPatientKeyRef.current = nextPatientKey;
     setDemographicsDraft(createWorkspaceDemographicsDraft(selectedPatient));
-    setDemographicsSaveMessage("");
-    setDemographicsSaveError(false);
+
+    if (hasSwitchedPatient) {
+      setDemographicsSaveMessage("");
+      setDemographicsSaveError(false);
+    }
   }, [selectedPatient]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchRecipientOptions = async () => {
+      if (!selectedPatient?.pid) {
+        if (isMounted) {
+          setRecipientOptions(null);
+          setRecipientOptionsError("");
+        }
+        return;
+      }
+
+      setRecipientOptionsLoading(true);
+      setRecipientOptionsError("");
+
+      try {
+        const data = await getPatientProgressNoteRecipientOptions(selectedPatient.pid);
+        if (!isMounted) {
+          return;
+        }
+
+        setRecipientOptions(data);
+      } catch (error) {
+        console.error("Failed to load note recipient options:", error);
+        if (isMounted) {
+          setRecipientOptions(null);
+          setRecipientOptionsError("Notification email options could not be loaded.");
+        }
+      } finally {
+        if (isMounted) {
+          setRecipientOptionsLoading(false);
+        }
+      }
+    };
+
+    fetchRecipientOptions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedPatient?.pid]);
+
+  useEffect(() => {
+    setProgressNoteTags(defaultProgressNoteTags());
+    setImportantToClinicSelection(null);
+    setNotifyLawyerSelection(null);
+    setRecipientModal(null);
+    setProgressNotesMessage("");
+    setNotesPage(1);
+    setNotesPagination(fallbackNotesPagination);
+  }, [selectedPatient?.pid]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setNoteFilterQuery(noteFilter.trim());
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [noteFilter]);
+
+  useEffect(() => {
+    setNotesPage(1);
+  }, [noteFilterQuery, notesListFilters]);
+
+  useEffect(() => {
+    if (!notesListRef.current) {
+      return;
+    }
+
+    notesListRef.current.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  }, [notesPage]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchProgressNotes = async () => {
+      if (!selectedPatient?.pid) {
+        if (isMounted) {
+          setProgressNotes([]);
+          setNotesPagination(fallbackNotesPagination);
+          setProgressNotesError("Patient notes are available once a patient record with an id is selected.");
+        }
+        return;
+      }
+
+      setProgressNotesLoading(true);
+      setProgressNotesError("");
+
+      try {
+        const data = await getPatientProgressNotes(
+          selectedPatient.pid,
+          noteFilterQuery,
+          notesPage,
+          notesPagination.pageSize,
+          notesListFilters,
+        );
+        if (!isMounted) {
+          return;
+        }
+
+        setProgressNotes(data.notes);
+        setNotesPagination(data.pagination);
+      } catch (error) {
+        console.error("Failed to load patient progress notes:", error);
+        if (isMounted) {
+          setProgressNotes([]);
+          setNotesPagination(fallbackNotesPagination);
+          setProgressNotesError("Unable to load patient notes right now.");
+        }
+      } finally {
+        if (isMounted) {
+          setProgressNotesLoading(false);
+        }
+      }
+    };
+
+    fetchProgressNotes();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedPatient?.pid, noteFilterQuery, notesPage, notesPagination.pageSize, notesListFilters]);
 
   if (!isHydrated || !selectedPatient) {
     return (
@@ -237,7 +460,7 @@ export default function WorkspacePageClient() {
       selectPatient(nextPatient);
       setDemographicsDraft(createWorkspaceDemographicsDraft(nextPatient));
       setDemographicsSaveError(false);
-      setDemographicsSaveMessage(result.message);
+      setDemographicsSaveMessage(result.message || "Patient demographics saved.");
     } catch (error) {
       console.error("Failed to save workspace demographics:", error);
       setDemographicsSaveError(true);
@@ -246,6 +469,190 @@ export default function WorkspacePageClient() {
       setIsSavingDemographics(false);
     }
   };
+
+  const handleProgressNoteTagChange = (
+    field: keyof ProgressNoteTagState,
+    checked: boolean,
+  ) => {
+    if (field === "importantToClinic") {
+      if (!checked) {
+        setProgressNoteTags((current) => ({ ...current, importantToClinic: false }));
+        setImportantToClinicSelection(null);
+        if (recipientModal?.type === "importantToClinic") {
+          setRecipientModal(null);
+        }
+        return;
+      }
+
+      const nextEmails = importantToClinicSelection?.emails
+        ?? recipientOptions?.clinicEmails
+        ?? [];
+      const nextFollowChain = importantToClinicSelection?.followEmailChain
+        ?? recipientOptions?.defaults.clinicFollowEmailChain
+        ?? false;
+
+      setRecipientModal({
+        type: "importantToClinic",
+        selectedEmails: [...nextEmails],
+        followEmailChain: nextFollowChain,
+        updateLawyerPortal: false,
+      });
+      return;
+    }
+
+    if (field === "notifyLawyer") {
+      if (!checked) {
+        setProgressNoteTags((current) => ({ ...current, notifyLawyer: false }));
+        setNotifyLawyerSelection(null);
+        if (recipientModal?.type === "notifyLawyer") {
+          setRecipientModal(null);
+        }
+        return;
+      }
+
+      const nextEmails = notifyLawyerSelection?.emails
+        ?? recipientOptions?.lawyerEmails
+        ?? [];
+      const nextFollowChain = notifyLawyerSelection?.followEmailChain
+        ?? recipientOptions?.defaults.lawyerFollowEmailChain
+        ?? false;
+      const nextUpdatePortal = notifyLawyerSelection?.updateLawyerPortal
+        ?? recipientOptions?.defaults.lawyerUpdatePortal
+        ?? false;
+
+      setRecipientModal({
+        type: "notifyLawyer",
+        selectedEmails: [...nextEmails],
+        followEmailChain: nextFollowChain,
+        updateLawyerPortal: nextUpdatePortal,
+      });
+      return;
+    }
+
+    setProgressNoteTags((current) => ({
+      ...current,
+      [field]: checked,
+    }));
+  };
+
+  const toggleRecipientModalEmail = (email: string, checked: boolean) => {
+    setRecipientModal((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const nextEmails = checked
+        ? Array.from(new Set([...current.selectedEmails, email]))
+        : current.selectedEmails.filter((item) => item !== email);
+
+      return {
+        ...current,
+        selectedEmails: nextEmails,
+      };
+    });
+  };
+
+  const handleRecipientModalCancel = () => {
+    if (recipientModal?.type === "importantToClinic") {
+      setProgressNoteTags((current) => ({ ...current, importantToClinic: false }));
+      setImportantToClinicSelection(null);
+    }
+
+    if (recipientModal?.type === "notifyLawyer") {
+      setProgressNoteTags((current) => ({ ...current, notifyLawyer: false }));
+      setNotifyLawyerSelection(null);
+    }
+
+    setRecipientModal(null);
+  };
+
+  const handleRecipientModalSave = () => {
+    if (!recipientModal) {
+      return;
+    }
+
+    if (recipientModal.type === "importantToClinic") {
+      if (recipientModal.selectedEmails.length === 0) {
+        setProgressNoteTags((current) => ({ ...current, importantToClinic: false }));
+        setImportantToClinicSelection(null);
+      } else {
+        setProgressNoteTags((current) => ({ ...current, importantToClinic: true }));
+        setImportantToClinicSelection({
+          emails: recipientModal.selectedEmails,
+          followEmailChain: recipientModal.followEmailChain,
+        });
+      }
+    }
+
+    if (recipientModal.type === "notifyLawyer") {
+      if (recipientModal.selectedEmails.length === 0) {
+        setProgressNoteTags((current) => ({ ...current, notifyLawyer: false }));
+        setNotifyLawyerSelection(null);
+      } else {
+        setProgressNoteTags((current) => ({ ...current, notifyLawyer: true }));
+        setNotifyLawyerSelection({
+          emails: recipientModal.selectedEmails,
+          followEmailChain: recipientModal.followEmailChain,
+          updateLawyerPortal: recipientModal.updateLawyerPortal,
+        });
+      }
+    }
+
+    setRecipientModal(null);
+  };
+
+  const handleSaveProgressNote = async () => {
+    if (!selectedPatient.pid) {
+      setProgressNotesMessage("This workspace patient is read-only here. Open from Patients or Dashboard to add notes.");
+      return;
+    }
+
+    if (!progressNoteText.trim()) {
+      setProgressNotesMessage("Please enter a note before saving.");
+      return;
+    }
+
+    setIsSavingProgressNote(true);
+    setProgressNotesMessage("");
+
+    try {
+      const result = await createPatientProgressNote({
+        pid: selectedPatient.pid,
+        body: progressNoteText.trim(),
+        tags: progressNoteTags,
+        importantToClinicSelection,
+        notifyLawyerSelection,
+      });
+
+      const refreshedNotes = await getPatientProgressNotes(
+        selectedPatient.pid,
+        noteFilterQuery,
+        notesPage,
+        notesPagination.pageSize,
+        notesListFilters,
+      );
+      setProgressNotes(refreshedNotes.notes);
+      setNotesPagination(refreshedNotes.pagination);
+
+      setProgressNoteText("");
+      setProgressNoteTags(defaultProgressNoteTags());
+      setImportantToClinicSelection(null);
+      setNotifyLawyerSelection(null);
+      setProgressNotesMessage(result.message);
+      setProgressNotesError("");
+    } catch (error) {
+      console.error("Failed to save progress note:", error);
+      setProgressNotesMessage("Unable to save progress note right now.");
+    } finally {
+      setIsSavingProgressNote(false);
+    }
+  };
+
+  const activeRecipientEmails = recipientModal?.type === "importantToClinic"
+    ? recipientOptions?.clinicEmails ?? []
+    : recipientModal?.type === "notifyLawyer"
+      ? recipientOptions?.lawyerEmails ?? []
+      : [];
 
   return (
     <section>
@@ -260,28 +667,28 @@ export default function WorkspacePageClient() {
         </div>
         <div className="quicklinks">
           <a href="#" title="Medical History Documents">
-            Medical History Docs
+            🗂 Medical History Docs
           </a>
           <a href="#" title="Referrals">
-            Referrals (2)
+            🧭 Referrals (2)
           </a>
           <a href="#" title="Ledger">
-            Ledger
+            📒 Ledger
           </a>
           <a href="#" title="Generate Full Report">
-            Generate Full Report
+            📊 Generate Full Report
           </a>
           <a href="#" title="Generate Partial Report">
-            Generate Partial Report
+            📄 Generate Partial Report
           </a>
           <a href="#" title="Generate Invoice">
-            Generate Invoice
+            💳 Generate Invoice
           </a>
           <a href="#" title="Send E-Script">
-            Send E-Script
+            💊 Send E-Script
           </a>
           <a href="#" title="Download CMS">
-            Download CMS
+            ⬇ Download CMS
           </a>
         </div>
         <div className="spacer"></div>
@@ -302,7 +709,7 @@ export default function WorkspacePageClient() {
         <div className="grid">
           <div className="card">
             <div className="hd">
-              <div className="title">Edit Demographics</div>
+              <div className="title">🪪 Edit Demographics</div>
               <div className="sub">{isDemographicsOpen ? "(expanded)" : "(collapsed)"}</div>
               <div className="right">
                 <button
@@ -408,125 +815,510 @@ export default function WorkspacePageClient() {
 
           <div className="card">
             <div className="hd">
-              <div className="title">Add Progress Note - Updates Here</div>
-              <div className="sub">(back office adds too)</div>
+              <div className="title">📝 Add Progress Note - Updates Here</div>
+              <div className="sub">
+                {isAddNoteOpen ? "(expanded | back office adds too)" : "(collapsed | back office adds too)"}
+              </div>
               <div className="right">
-                <button className="mini primary" id="wsSaveNote">
-                  Save note
+                <button
+                  className="mini primary"
+                  id="wsSaveNote"
+                  type="button"
+                  disabled={isSavingProgressNote}
+                  onClick={handleSaveProgressNote}
+                >
+                  {isSavingProgressNote ? "Saving..." : "Save note"}
                 </button>
                 <button className="mini" id="wsSendLOP">
                   Send LOP request
                 </button>
+                <button
+                  className="mini"
+                  type="button"
+                  onClick={() => setIsAddNoteOpen((current) => !current)}
+                >
+                  {isAddNoteOpen ? "Collapse" : "Expand"}
+                </button>
               </div>
             </div>
+            {isAddNoteOpen && (
             <div className="bd">
               <div className="field">
                 <label>Note</label>
                 <textarea
                   id="wsNoteText"
+                  value={progressNoteText}
+                  onChange={(event) => setProgressNoteText(event.target.value)}
                   placeholder="Ex: patient missed, patient not answering calls, update on case, etc."
                 ></textarea>
               </div>
               <div className="hr"></div>
               <div className="checkgrid">
                 <label className="checkline">
-                  <input type="checkbox" /> Urgent
+                  <input
+                    type="checkbox"
+                    checked={progressNoteTags.urgent}
+                    onChange={(event) => handleProgressNoteTagChange("urgent", event.target.checked)}
+                  /> Urgent
                 </label>
                 <label className="checkline">
-                  <input type="checkbox" /> Important - to clinic
+                  <input
+                    type="checkbox"
+                    checked={progressNoteTags.importantToClinic}
+                    onChange={(event) => handleProgressNoteTagChange("importantToClinic", event.target.checked)}
+                  /> Important - to clinic
                 </label>
                 <label className="checkline">
-                  <input type="checkbox" /> Notify Lawyer
+                  <input
+                    type="checkbox"
+                    checked={progressNoteTags.notifyLawyer}
+                    onChange={(event) => handleProgressNoteTagChange("notifyLawyer", event.target.checked)}
+                  /> Notify Lawyer
                 </label>
                 <label className="checkline">
-                  <input type="checkbox" /> Notify Clinic Director
+                  <input
+                    type="checkbox"
+                    checked={progressNoteTags.notifyClinicDirector}
+                    onChange={(event) => handleProgressNoteTagChange("notifyClinicDirector", event.target.checked)}
+                  /> Notify Clinic Director
                 </label>
                 <label className="checkline">
-                  <input type="checkbox" /> Notify Back Office
+                  <input
+                    type="checkbox"
+                    checked={progressNoteTags.notifyBackOffice}
+                    onChange={(event) => handleProgressNoteTagChange("notifyBackOffice", event.target.checked)}
+                  /> Notify Back Office
                 </label>
                 <label className="checkline">
-                  <input type="checkbox" /> Share to Affiliate Notes
+                  <input
+                    type="checkbox"
+                    checked={progressNoteTags.shareToLawyerNotes}
+                    onChange={(event) => handleProgressNoteTagChange("shareToLawyerNotes", event.target.checked)}
+                  /> Share to Lawyer Notes
                 </label>
                 <label className="checkline">
-                  <input type="checkbox" /> Admin only
+                  <input
+                    type="checkbox"
+                    checked={progressNoteTags.shareToAffiliateNotes}
+                    onChange={(event) => handleProgressNoteTagChange("shareToAffiliateNotes", event.target.checked)}
+                  /> Share to Affiliate Notes
                 </label>
                 <label className="checkline">
-                  <input type="checkbox" /> Billing notice
+                  <input
+                    type="checkbox"
+                    checked={progressNoteTags.adminOnly}
+                    onChange={(event) => handleProgressNoteTagChange("adminOnly", event.target.checked)}
+                  /> Admin only
                 </label>
                 <label className="checkline">
-                  <input type="checkbox" /> Notify referrals
+                  <input
+                    type="checkbox"
+                    checked={progressNoteTags.billingNotice}
+                    onChange={(event) => handleProgressNoteTagChange("billingNotice", event.target.checked)}
+                  /> Billing Notice
                 </label>
                 <label className="checkline">
-                  <input type="checkbox" /> Finance
+                  <input
+                    type="checkbox"
+                    checked={progressNoteTags.notifyIntake}
+                    onChange={(event) => handleProgressNoteTagChange("notifyIntake", event.target.checked)}
+                  /> Notify Intake
+                </label>
+                <label className="checkline">
+                  <input
+                    type="checkbox"
+                    checked={progressNoteTags.notifyRecords}
+                    onChange={(event) => handleProgressNoteTagChange("notifyRecords", event.target.checked)}
+                  /> Notify Records
+                </label>
+                <label className="checkline">
+                  <input
+                    type="checkbox"
+                    checked={progressNoteTags.notifyReferrals}
+                    onChange={(event) => handleProgressNoteTagChange("notifyReferrals", event.target.checked)}
+                  /> Notify Referrals
+                </label>
+                <label className="checkline">
+                  <input
+                    type="checkbox"
+                    checked={progressNoteTags.addToTreatmentPlan}
+                    onChange={(event) => handleProgressNoteTagChange("addToTreatmentPlan", event.target.checked)}
+                  /> Add to treatment plan
+                </label>
+                <label className="checkline">
+                  <input
+                    type="checkbox"
+                    checked={progressNoteTags.finance}
+                    onChange={(event) => handleProgressNoteTagChange("finance", event.target.checked)}
+                  /> Finance
                 </label>
               </div>
+              {recipientOptionsLoading && (
+                <div className="hint" style={{ marginTop: "10px" }}>
+                  Loading notification email options...
+                </div>
+              )}
+              {recipientOptionsError && (
+                <div className="hint" style={{ marginTop: "10px", color: "var(--bad)" }}>
+                  {recipientOptionsError}
+                </div>
+              )}
+              {importantToClinicSelection && (
+                <div className="hint" style={{ marginTop: "10px" }}>
+                  Clinic email on save: {importantToClinicSelection.emails.join(", ")}
+                </div>
+              )}
+              {notifyLawyerSelection && (
+                <div className="hint" style={{ marginTop: "6px" }}>
+                  Lawyer email on save: {notifyLawyerSelection.emails.join(", ")}
+                  {notifyLawyerSelection.updateLawyerPortal ? " | Update lawyer portal" : ""}
+                </div>
+              )}
+              {progressNotesMessage && (
+                <div className="hint" style={{ marginTop: "10px" }}>
+                  {progressNotesMessage}
+                </div>
+              )}
             </div>
+            )}
           </div>
 
           <div className="card">
             <div className="hd">
-              <div className="title">Patient Update Section</div>
-              <div className="sub">(collapse)</div>
+              <div className="title">📌 Patient Update Section</div>
+              <div className="sub">{isUpdatesOpen ? "(expanded)" : "(collapsed)"}</div>
               <div className="right">
-                <button className="mini" data-collapse="#updatesBody">
-                  Toggle
+                <button
+                  className="mini"
+                  type="button"
+                  onClick={() => setIsUpdatesOpen((current) => !current)}
+                >
+                  {isUpdatesOpen ? "Collapse" : "Expand"}
                 </button>
               </div>
             </div>
+            {isUpdatesOpen && (
             <div className="bd" id="updatesBody">
               <div className="toolbar" style={{ marginBottom: "10px" }}>
                 <div className="search-mini" style={{ minWidth: "240px" }}>
-                  Search <input id="noteFilter" placeholder="Search notes..." />
+                  🔎{" "}
+                  <input
+                    id="noteFilter"
+                    placeholder="Search notes..."
+                    value={noteFilter}
+                    onChange={(event) => setNoteFilter(event.target.value)}
+                  />
                 </div>
-                <button className="mini primary">Add/Edit</button>
-                <button className="mini">View all</button>
-                <span className="hint">Filtered</span>
+                <button
+                  className="mini primary"
+                  type="button"
+                  onClick={() => document.getElementById("wsNoteText")?.focus()}
+                >
+                  Add/Edit
+                </button>
+                <button
+                  className="mini"
+                  type="button"
+                  onClick={() => setNoteFilter("")}
+                >
+                  View all
+                </button>
+                <span className="hint">{noteFilter.trim() ? "Filtered" : "All notes"}</span>
               </div>
-              <div id="wsNotesList" className="grid" style={{ gap: "10px" }}>
-                <div className="note">
-                  <div className="h">
-                    <div className="t">Patient profile</div>
-                    <div className="m">{formatWorkspaceDate(selectedPatient.lastUpdated)}</div>
+              <div className="checkgrid" style={{ marginBottom: "10px" }}>
+                <label className="checkline">
+                  <input
+                    type="checkbox"
+                    checked={notesListFilters.includeUrgent}
+                    onChange={(event) =>
+                      setNotesListFilters((current) => ({
+                        ...current,
+                        includeUrgent: event.target.checked,
+                      }))
+                    }
+                  /> Urgent
+                </label>
+                <label className="checkline">
+                  <input
+                    type="checkbox"
+                    checked={notesListFilters.includeImportantToClinic}
+                    onChange={(event) =>
+                      setNotesListFilters((current) => ({
+                        ...current,
+                        includeImportantToClinic: event.target.checked,
+                      }))
+                    }
+                  /> Important - to clinic
+                </label>
+                <label className="checkline">
+                  <input
+                    type="checkbox"
+                    checked={notesListFilters.includeNotifyLawyer}
+                    onChange={(event) =>
+                      setNotesListFilters((current) => ({
+                        ...current,
+                        includeNotifyLawyer: event.target.checked,
+                      }))
+                    }
+                  /> Notify Lawyer
+                </label>
+                <label className="checkline">
+                  <input
+                    type="checkbox"
+                    checked={notesListFilters.includeNotifyBackOffice}
+                    onChange={(event) =>
+                      setNotesListFilters((current) => ({
+                        ...current,
+                        includeNotifyBackOffice: event.target.checked,
+                      }))
+                    }
+                  /> Notify Back Office
+                </label>
+                <label className="checkline">
+                  <input
+                    type="checkbox"
+                    checked={notesListFilters.includeNotifyClinicDirector}
+                    onChange={(event) =>
+                      setNotesListFilters((current) => ({
+                        ...current,
+                        includeNotifyClinicDirector: event.target.checked,
+                      }))
+                    }
+                  /> Notify Clinic Director
+                </label>
+                <label className="checkline">
+                  <input
+                    type="checkbox"
+                    checked={notesListFilters.includeAdminOnly}
+                    onChange={(event) =>
+                      setNotesListFilters((current) => ({
+                        ...current,
+                        includeAdminOnly: event.target.checked,
+                        excludeAdminOnly: event.target.checked ? false : current.excludeAdminOnly,
+                      }))
+                    }
+                  /> Admin only
+                </label>
+                <label className="checkline">
+                  <input
+                    type="checkbox"
+                    checked={notesListFilters.includeFinance}
+                    onChange={(event) =>
+                      setNotesListFilters((current) => ({
+                        ...current,
+                        includeFinance: event.target.checked,
+                      }))
+                    }
+                  /> Finance
+                </label>
+                <label className="checkline">
+                  <input
+                    type="checkbox"
+                    checked={notesListFilters.includeBillingNotice}
+                    onChange={(event) =>
+                      setNotesListFilters((current) => ({
+                        ...current,
+                        includeBillingNotice: event.target.checked,
+                      }))
+                    }
+                  /> Billing Notice
+                </label>
+                <label className="checkline">
+                  <input
+                    type="checkbox"
+                    checked={notesListFilters.includeWeeklyNoteUpdate}
+                    onChange={(event) =>
+                      setNotesListFilters((current) => ({
+                        ...current,
+                        includeWeeklyNoteUpdate: event.target.checked,
+                      }))
+                    }
+                  /> Weekly Note Update
+                </label>
+                <label className="checkline">
+                  <input
+                    type="checkbox"
+                    checked={notesListFilters.includeEmailChain}
+                    onChange={(event) =>
+                      setNotesListFilters((current) => ({
+                        ...current,
+                        includeEmailChain: event.target.checked,
+                      }))
+                    }
+                  /> Email Chain
+                </label>
+                <label className="checkline">
+                  <input
+                    type="checkbox"
+                    checked={notesListFilters.includeTreatmentPlan}
+                    onChange={(event) =>
+                      setNotesListFilters((current) => ({
+                        ...current,
+                        includeTreatmentPlan: event.target.checked,
+                      }))
+                    }
+                  /> Treatment Plan
+                </label>
+                <label className="checkline">
+                  <input
+                    type="checkbox"
+                    checked={notesListFilters.includeNotifyRecords}
+                    onChange={(event) =>
+                      setNotesListFilters((current) => ({
+                        ...current,
+                        includeNotifyRecords: event.target.checked,
+                      }))
+                    }
+                  /> Notify Records
+                </label>
+                <label className="checkline">
+                  <input
+                    type="checkbox"
+                    checked={notesListFilters.includeProfileChanges}
+                    onChange={(event) =>
+                      setNotesListFilters((current) => ({
+                        ...current,
+                        includeProfileChanges: event.target.checked,
+                      }))
+                    }
+                  /> Profile changes
+                </label>
+                <label className="checkline">
+                  <input
+                    type="checkbox"
+                    checked={notesListFilters.excludeWeeklyUpdate}
+                    onChange={(event) =>
+                      setNotesListFilters((current) => ({
+                        ...current,
+                        excludeWeeklyUpdate: event.target.checked,
+                      }))
+                    }
+                  /> Exclude Weekly Update
+                </label>
+                <label className="checkline">
+                  <input
+                    type="checkbox"
+                    checked={notesListFilters.excludeCaseInfo}
+                    onChange={(event) =>
+                      setNotesListFilters((current) => ({
+                        ...current,
+                        excludeCaseInfo: event.target.checked,
+                      }))
+                    }
+                  /> Exclude Case info
+                </label>
+                <label className="checkline">
+                  <input
+                    type="checkbox"
+                    checked={notesListFilters.excludeAdminOnly}
+                    onChange={(event) =>
+                      setNotesListFilters((current) => ({
+                        ...current,
+                        excludeAdminOnly: event.target.checked,
+                        includeAdminOnly: event.target.checked ? false : current.includeAdminOnly,
+                      }))
+                    }
+                  /> Exclude Admin Only
+                </label>
+              </div>
+              <div
+                id="wsNotesList"
+                ref={notesListRef}
+                className="grid"
+                style={{
+                  gap: "10px",
+                  maxHeight: "420px",
+                  overflowY: "auto",
+                  paddingRight: "4px",
+                }}
+              >
+                {progressNotesLoading && (
+                  <div className="softbox hint">Loading progress notes...</div>
+                )}
+                {!progressNotesLoading && progressNotesError && (
+                  <div className="softbox hint">{progressNotesError}</div>
+                )}
+                {!progressNotesLoading && !progressNotesError && progressNotes.length === 0 && (
+                  <div className="softbox hint">
+                    {noteFilterQuery ? "No notes match this search." : "No progress notes yet."}
                   </div>
-                  <div className="p">
-                    Current facility: {selectedPatient.facility || "N/A"} | Last visit:{" "}
-                    {formatWorkspaceDate(selectedPatient.lastVisit)} | Next visit:{" "}
-                    {formatWorkspaceDate(selectedPatient.nextVisit)}
-                  </div>
-                </div>
-
-                <div className="note">
-                  <div className="h">
-                    <div className="t">Contact</div>
-                    <div className="m">{selectedPatient.status || "Active"}</div>
-                  </div>
-                  <div className="p">
-                    Phone: {formatWorkspacePhone(selectedPatient.phone)} | Email:{" "}
-                    {selectedPatient.email || "N/A"}
-                  </div>
-                </div>
-
-                <div className="note">
-                  <div className="h">
-                    <div className="t">Billing snapshot</div>
-                    <div className="m">
-                      {selectedPatient.needsUpdate ? "Needs update" : "Up to date"}
+                )}
+                {progressNotes.map((note) => (
+                  <div key={note.id} className="note">
+                    <div className="h">
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="t">{note.superFacilityDescription || "N/A"}</div>
+                        <div className="m">{note.facilityName || "N/A"}</div>
+                      </div>
+                      <div style={{ textAlign: "right", alignSelf: "flex-start", marginLeft: "12px", flexShrink: 0 }}>
+                        <div className="m">{formatProgressNoteDate(note.date)}</div>
+                        <div className="m">
+                          By {note.userFullName || note.user || "EMR user"}
+                        </div>
+                      </div>
                     </div>
+                    <div className="p" style={{ whiteSpace: "pre-wrap" }}>
+                      {note.body}
+                    </div>
+                    {(note.externalLawyerHasAccess || note.externalAffiliateHasAccess || note.types.length > 0) && (
+                      <div className="actions-row" style={{ marginTop: "8px" }}>
+                        {note.externalLawyerHasAccess && (
+                          <span className="chip">Shared With Lawyer</span>
+                        )}
+                        {note.externalAffiliateHasAccess && (
+                          <span className="chip">Shared With Affiliate</span>
+                        )}
+                        {note.types.map((type) => (
+                          <span key={`${note.id}-${type}`} className="chip">
+                            {progressNoteTypeLabels[type] ?? `Type ${type}`}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div className="p">
-                    Current balance: {formatWorkspaceCurrency(selectedPatient.balance)}
-                  </div>
+                ))}
+              </div>
+              <div className="row wrap" style={{ marginTop: "10px", gap: "8px" }}>
+                <div className="hint">
+                  Showing {progressNotes.length === 0 ? 0 : (notesPagination.page - 1) * notesPagination.pageSize + 1}
+                  -
+                  {Math.min(notesPagination.page * notesPagination.pageSize, notesPagination.totalItems)} of {notesPagination.totalItems}
                 </div>
+                <div className="spacer" />
+                <div className="hint">
+                  Page {notesPagination.page} of {notesPagination.totalPages}
+                </div>
+                <button
+                  className="mini"
+                  type="button"
+                  disabled={progressNotesLoading || notesPagination.page <= 1}
+                  onClick={() => setNotesPage((current) => Math.max(1, current - 1))}
+                >
+                  Prev
+                </button>
+                <button
+                  className="mini primary"
+                  type="button"
+                  disabled={progressNotesLoading || notesPagination.page >= notesPagination.totalPages}
+                  onClick={() =>
+                    setNotesPage((current) =>
+                      Math.min(notesPagination.totalPages, current + 1),
+                    )
+                  }
+                >
+                  Next
+                </button>
               </div>
             </div>
+            )}
           </div>
         </div>
 
         <div className="grid">
           <div className="card">
             <div className="hd">
-              <div className="title">Appointments</div>
-              <div className="sub">(collapse)</div>
+              <div className="title">📅 Appointments</div>
+              <div className="sub">(collapsed)</div>
               <div className="right">
                 <button className="mini primary">Add</button>
               </div>
@@ -551,8 +1343,8 @@ export default function WorkspacePageClient() {
 
           <div className="card">
             <div className="hd">
-              <div className="title">Diagnoses</div>
-              <div className="sub">(collapse)</div>
+              <div className="title">🩺 Diagnoses</div>
+              <div className="sub">(collapsed)</div>
               <div className="right">
                 <button className="mini">Edit</button>
               </div>
@@ -564,7 +1356,7 @@ export default function WorkspacePageClient() {
 
           <div className="card">
             <div className="hd">
-              <div className="title">Case Checklist + Report Tracking</div>
+              <div className="title">✅ Case Checklist + Report Tracking</div>
               <div className="right">
                 <button className="mini">Edit</button>
               </div>
@@ -651,7 +1443,7 @@ export default function WorkspacePageClient() {
           <div className="card">
             <div className="hd">
               <div className="title">Customize Report</div>
-              <div className="sub">(collapse)</div>
+              <div className="sub">(collapsed)</div>
               <div className="right">
                 <button className="mini primary">Save</button>
                 <button className="mini">Share w/ Lawyer</button>
@@ -698,7 +1490,7 @@ export default function WorkspacePageClient() {
           <div className="card">
             <div className="hd">
               <div className="title">Claims</div>
-              <div className="sub">(collapse)</div>
+              <div className="sub">(collapsed)</div>
               <div className="right">
                 <button className="mini">Select all</button>
                 <button className="mini">Deselect all</button>
@@ -727,8 +1519,8 @@ export default function WorkspacePageClient() {
 
           <div className="card">
             <div className="hd">
-              <div className="title">Treatment Plan</div>
-              <div className="sub">(collapse)</div>
+              <div className="title">🧾 Treatment Plan</div>
+              <div className="sub">(collapsed)</div>
               <div className="right">
                 <button className="mini primary">Save & Share with Lawyer</button>
                 <button className="mini">Save</button>
@@ -763,7 +1555,7 @@ export default function WorkspacePageClient() {
           <div className="card">
             <div className="hd">
               <div className="title">Billing</div>
-              <div className="sub">(collapse)</div>
+              <div className="sub">(collapsed)</div>
               <div className="right">
                 <button className="mini">Case information</button>
                 <button className="mini primary">Treatment status request</button>
@@ -813,6 +1605,102 @@ export default function WorkspacePageClient() {
           </div>
         </div>
       </div>
+
+      {recipientModal && (
+        <div className="modal-backdrop show" role="presentation">
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="workspace-note-recipient-modal-title"
+          >
+            <div className="mhead">
+              <div>
+                <div className="mtitle" id="workspace-note-recipient-modal-title">
+                  {recipientModal.type === "importantToClinic" ? "Notify clinic" : "Notify Lawyer"}
+                </div>
+                <div className="hint">
+                  Please confirm the emails before this note is saved.
+                </div>
+              </div>
+              <div className="right">
+                <button className="mini" type="button" onClick={handleRecipientModalCancel}>
+                  Close
+                </button>
+              </div>
+            </div>
+            <div className="mbody">
+              {activeRecipientEmails.length === 0 ? (
+                <div className="softbox hint">
+                  {recipientModal.type === "importantToClinic"
+                    ? "No emails added by clinic."
+                    : "No emails added by lawyer."}
+                </div>
+              ) : (
+                <>
+                  <div className="checkgrid">
+                    {activeRecipientEmails.map((email) => (
+                      <label key={`${recipientModal.type}-${email}`} className="checkline">
+                        <input
+                          type="checkbox"
+                          checked={recipientModal.selectedEmails.includes(email)}
+                          onChange={(event) => toggleRecipientModalEmail(email, event.target.checked)}
+                        /> {email}
+                      </label>
+                    ))}
+                  </div>
+                  <div className="hr"></div>
+                </>
+              )}
+
+              <div className="checkgrid">
+                <label className="checkline">
+                  <input
+                    type="checkbox"
+                    checked={recipientModal.followEmailChain}
+                    onChange={(event) =>
+                      setRecipientModal((current) =>
+                        current
+                          ? {
+                              ...current,
+                              followEmailChain: event.target.checked,
+                            }
+                          : current,
+                      )
+                    }
+                  /> Follow Email Chain
+                </label>
+                {recipientModal.type === "notifyLawyer" && (
+                  <label className="checkline">
+                    <input
+                      type="checkbox"
+                      checked={recipientModal.updateLawyerPortal}
+                      onChange={(event) =>
+                        setRecipientModal((current) =>
+                          current
+                            ? {
+                                ...current,
+                                updateLawyerPortal: event.target.checked,
+                              }
+                            : current,
+                        )
+                      }
+                    /> Update lawyer portal
+                  </label>
+                )}
+              </div>
+            </div>
+            <div className="mfoot">
+              <button className="mini" type="button" onClick={handleRecipientModalCancel}>
+                No
+              </button>
+              <button className="mini primary" type="button" onClick={handleRecipientModalSave}>
+                Yes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

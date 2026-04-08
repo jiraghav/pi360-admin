@@ -105,6 +105,27 @@ function formatPhone(value: string | null) {
   return `(${normalizedDigits.slice(0, 3)}) ${normalizedDigits.slice(3, 6)}-${normalizedDigits.slice(6)}`;
 }
 
+function maskPhoneInput(value: string) {
+  const digits = value.replace(/\D/g, "");
+  const normalizedDigits =
+    digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
+  const limited = normalizedDigits.slice(0, 10);
+
+  if (limited.length === 0) {
+    return "";
+  }
+
+  if (limited.length <= 3) {
+    return `(${limited}`;
+  }
+
+  if (limited.length <= 6) {
+    return `(${limited.slice(0, 3)}) ${limited.slice(3)}`;
+  }
+
+  return `(${limited.slice(0, 3)}) ${limited.slice(3, 6)}-${limited.slice(6)}`;
+}
+
 function getPatientMeta(patient: PatientListItem) {
   const segments: string[] = [];
 
@@ -303,12 +324,14 @@ export default function PatientsPageClient() {
     value: string | number | null,
   ) => {
     const patientKey = String(getPatientKey(patient));
+    const normalizedValue =
+      field === "phone" && typeof value === "string" ? maskPhoneInput(value) : value;
 
     setPatientDrafts((current) => ({
       ...current,
       [patientKey]: {
         ...(current[patientKey] ?? createDemographicsDraft(patient)),
-        [field]: value,
+        [field]: normalizedValue,
       },
     }));
   };
