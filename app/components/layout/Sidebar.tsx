@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { getUser } from "@/lib/auth";
+import { useSelectedPatient } from "../SelectedPatientProvider";
 
 interface SidebarProps {
   onLogout?: () => void;
@@ -11,14 +12,15 @@ interface SidebarProps {
 export default function Sidebar({ onLogout }: SidebarProps) {
   const path = usePathname();
   const user = getUser();
+  const { selectedPatient } = useSelectedPatient();
 
   const isActive = (route: string) => path.includes(route);
 
   const getInitials = (username: string) => {
     return username
-      .split(' ')
-      .map(word => word.charAt(0).toUpperCase())
-      .join('')
+      .split(" ")
+      .map((word) => word.charAt(0).toUpperCase())
+      .join("")
       .slice(0, 2);
   };
 
@@ -33,7 +35,6 @@ export default function Sidebar({ onLogout }: SidebarProps) {
 
   return (
     <aside className="sidebar">
-      {/* Mobile Close Button */}
       <button
         className="mobile-close-btn"
         onClick={closeMobileSidebar}
@@ -42,7 +43,6 @@ export default function Sidebar({ onLogout }: SidebarProps) {
         ✕
       </button>
 
-      {/* Brand */}
       <div className="brandbar">
         <div className="logo"></div>
         <div className="brandtext">
@@ -51,7 +51,6 @@ export default function Sidebar({ onLogout }: SidebarProps) {
         </div>
       </div>
 
-      {/* Actions */}
       <div className="side-actions">
         <button className="pillbtn" onClick={closeMobileSidebar}>
           📝 <span>New Note</span>
@@ -69,7 +68,6 @@ export default function Sidebar({ onLogout }: SidebarProps) {
         )}
       </div>
 
-      {/* Navigation */}
       <nav className="nav">
         <div className="group-label">Core</div>
 
@@ -80,11 +78,6 @@ export default function Sidebar({ onLogout }: SidebarProps) {
         >
           <div className="ico">🏠</div>
           <div>Dashboard</div>
-          {/* <div className="meta">
-            <span className="badge blue" id="badgeWork">
-              15
-            </span>
-          </div> */}
         </Link>
 
         <Link
@@ -94,23 +87,29 @@ export default function Sidebar({ onLogout }: SidebarProps) {
         >
           <div className="ico">🧑‍⚕️</div>
           <div>Patients</div>
-          {/* <div className="meta">
-            <span className="badge red" id="badgeNeeds">
-              3
-            </span>
-          </div> */}
         </Link>
 
         <Link
-          href="/workspace"
+          href={selectedPatient ? "/workspace" : "/patients"}
           className={isActive("workspace") ? "active" : ""}
           onClick={closeMobileSidebar}
+          aria-disabled={!selectedPatient}
+          title={selectedPatient ? `Open ${selectedPatient.name}` : "Select a patient first"}
+          style={!selectedPatient ? { opacity: 0.6 } : undefined}
         >
           <div className="ico">🧾</div>
-          <div>Patient Workspace</div>
-          {/* <div className="meta">
-            <span className="badge">EMR</span>
-          </div> */}
+          <div>
+            <div>Patient Workspace</div>
+            <div
+              style={{
+                fontSize: "11px",
+                color: "var(--muted)",
+                marginTop: "2px",
+              }}
+            >
+              {selectedPatient ? selectedPatient.name : "Select patient first"}
+            </div>
+          </div>
         </Link>
 
         <div className="group-label">Operations</div>
@@ -122,9 +121,6 @@ export default function Sidebar({ onLogout }: SidebarProps) {
         >
           <div className="ico">🏥</div>
           <div>Facilities</div>
-          {/* <div className="meta">
-            <span className="badge">42</span>
-          </div> */}
         </Link>
 
         <Link
@@ -134,9 +130,6 @@ export default function Sidebar({ onLogout }: SidebarProps) {
         >
           <div className="ico">✉️</div>
           <div>Email Templates</div>
-          {/* <div className="meta">
-            <span className="badge">271</span>
-          </div> */}
         </Link>
 
         <Link
@@ -146,9 +139,6 @@ export default function Sidebar({ onLogout }: SidebarProps) {
         >
           <div className="ico">📄</div>
           <div>Reports</div>
-          {/* <div className="meta">
-            <span className="badge green">Ready</span>
-          </div> */}
         </Link>
 
         <div className="group-label">Admin</div>
@@ -160,17 +150,13 @@ export default function Sidebar({ onLogout }: SidebarProps) {
         >
           <div className="ico">⚙️</div>
           <div>Settings</div>
-          {/* <div className="meta">
-            <span className="badge">Beta</span>
-          </div> */}
         </Link>
       </nav>
 
-      {/* Footer */}
       <div className="sidebar-foot">
-        <div className="miniuser">{user ? getInitials(user.username) : 'U'}</div>
+        <div className="miniuser">{user ? getInitials(user.username) : "U"}</div>
         <div className="uinfo">
-          <div className="n">{user ? user.username : 'User'}</div>
+          <div className="n">{user ? user.username : "User"}</div>
           <div className="r">Admin | CIC</div>
         </div>
         <div className="spacer"></div>

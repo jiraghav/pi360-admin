@@ -1,6 +1,8 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useSelectedPatient } from "../SelectedPatientProvider";
 
 const pageConfig: Record<string, { title: string; subtitle: string }> = {
   "/": {
@@ -41,7 +43,14 @@ const pageConfig: Record<string, { title: string; subtitle: string }> = {
 
 export default function Topbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const config = pageConfig[pathname] || pageConfig["/"];
+  const { selectedPatient, clearSelectedPatient } = useSelectedPatient();
+
+  const handleCloseWorkspace = () => {
+    clearSelectedPatient();
+    router.push("/patients");
+  };
 
   return (
     <>
@@ -52,18 +61,23 @@ export default function Topbar() {
         </div>
 
         <div className="searchbar">
-          🔎{" "}
-          <input placeholder="Search patient, facility, claim, template..." />
+          {"\u{1F50E}"} <input placeholder="Search patient, facility, claim, template..." />
         </div>
 
         <div className="top-actions">
-          <button className="btn secondary">
-            🧾 <span>Open EMR</span>
-          </button>
+          <Link
+            className="btn secondary"
+            href={selectedPatient ? "/workspace" : "/patients"}
+            aria-disabled={!selectedPatient}
+            title={selectedPatient ? `Open ${selectedPatient.name}` : "Select a patient first"}
+            style={!selectedPatient ? { opacity: 0.6 } : undefined}
+          >
+            {"\u{1F9FE}"} <span>{selectedPatient ? "Open EMR" : "Select Patient"}</span>
+          </Link>
           <button className="btn">
-            ➕ <span>New Task</span>
+            {"\u2795"} <span>New Task</span>
           </button>
-          <button className="iconbtn">🔔</button>
+          <button className="iconbtn">{"\u{1F514}"}</button>
         </div>
       </div>
       <div className="notif-strip">
@@ -84,7 +98,30 @@ export default function Topbar() {
         </div>
         <div className="spacer"></div>
         <div className="pill" title="Selected patient">
-          Patient: <strong id="selectedPatientPill">April Gonzales</strong>
+          Patient:{" "}
+          <strong id="selectedPatientPill">
+            {selectedPatient ? selectedPatient.name : "Not selected"}
+          </strong>
+          {selectedPatient && (
+            <button
+              type="button"
+              onClick={handleCloseWorkspace}
+              title="Close patient workspace"
+              aria-label="Close patient workspace"
+              style={{
+                marginLeft: "8px",
+                border: "none",
+                background: "transparent",
+                cursor: "pointer",
+                padding: 0,
+                fontSize: "14px",
+                lineHeight: 1,
+                color: "inherit",
+              }}
+            >
+              {"\u00D7"}
+            </button>
+          )}
         </div>
       </div>
     </>

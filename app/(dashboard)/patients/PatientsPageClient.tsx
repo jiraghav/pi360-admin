@@ -1,7 +1,8 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
+import { useSelectedPatient } from "@/app/components/SelectedPatientProvider";
 import { getFacilities, type FacilityOption } from "@/lib/facilities";
 import {
   getPatientsPage,
@@ -10,6 +11,7 @@ import {
   type PatientListItem,
   type PatientsPagination,
 } from "@/lib/patients";
+import { createWorkspacePatientFromListItem } from "@/lib/workspace";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -147,6 +149,8 @@ function createVisitsBillingDraft(patient: PatientListItem): PatientVisitsBillin
 }
 
 export default function PatientsPageClient() {
+  const router = useRouter();
+  const { selectPatient } = useSelectedPatient();
   const [patients, setPatients] = useState<PatientListItem[]>([]);
   const [pagination, setPagination] = useState<PatientsPagination>(fallbackPagination);
   const [searchInput, setSearchInput] = useState("");
@@ -472,6 +476,11 @@ export default function PatientsPageClient() {
     }
   };
 
+  const handleOpenWorkspace = (patient: PatientListItem) => {
+    selectPatient(createWorkspacePatientFromListItem(patient));
+    router.push("/workspace");
+  };
+
   return (
     <section className="patients-page">
       <div className="card patients-card">
@@ -600,9 +609,13 @@ export default function PatientsPageClient() {
                     >
                       {expandedPatientId === patientKey ? "Collapse" : "Expand"}
                     </button>
-                    <Link className="mini primary" href="/workspace" style={{ textDecoration: "none" }}>
+                    <button
+                      className="mini primary"
+                      type="button"
+                      onClick={() => handleOpenWorkspace(patient)}
+                    >
                       Open EMR
-                    </Link>
+                    </button>
                   </div>
                 </div>
 

@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSelectedPatient } from "@/app/components/SelectedPatientProvider";
 import {
   getDashboardSummary,
   getNeedsUpdatePatientsPage,
@@ -9,6 +11,7 @@ import {
   type NeedsUpdatePagination,
   type NeedsUpdatePatient,
 } from "@/lib/dashboard";
+import { createWorkspacePatientFromNeedsUpdate } from "@/lib/workspace";
 
 const defaultSummary: DashboardSummary = {
   activePatients: 0,
@@ -20,6 +23,8 @@ const defaultSummary: DashboardSummary = {
 };
 
 export default function DashboardClient() {
+  const router = useRouter();
+  const { selectPatient } = useSelectedPatient();
   const [summary, setSummary] = useState<DashboardSummary>(defaultSummary);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [needsLoading, setNeedsLoading] = useState(true);
@@ -119,6 +124,11 @@ export default function DashboardClient() {
       return value;
     }
     return shortDate.format(parsed);
+  };
+
+  const handleOpenWorkspace = (patient: NeedsUpdatePatient) => {
+    selectPatient(createWorkspacePatientFromNeedsUpdate(patient));
+    router.push("/workspace");
   };
 
   const needsStart = needsUpdatePagination.totalItems === 0
@@ -282,9 +292,13 @@ export default function DashboardClient() {
                     >
                       Open
                     </Link>
-                    <Link className="mini" href="/workspace" style={{ textDecoration: "none" }}>
+                    <button
+                      className="mini"
+                      type="button"
+                      onClick={() => handleOpenWorkspace(patient)}
+                    >
                       Open EMR
-                    </Link>
+                    </button>
                   </div>
                 </div>
               ))}

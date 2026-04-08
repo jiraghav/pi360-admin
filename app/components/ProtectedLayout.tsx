@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { isAuthenticated, logout } from "@/lib/auth";
+import { SelectedPatientProvider } from "./SelectedPatientProvider";
 import Sidebar from "./layout/Sidebar";
 import Topbar from "./layout/Topbar";
 import EmrTopnav from "./layout/EmrTopnav";
@@ -20,7 +21,13 @@ export default function ProtectedLayout({ children }: ProtectedLayoutProps) {
     if (!isAuthenticated()) {
       router.push("/login");
     } else {
-      setIsLoading(false);
+      const timeoutId = window.setTimeout(() => {
+        setIsLoading(false);
+      }, 0);
+
+      return () => {
+        window.clearTimeout(timeoutId);
+      };
     }
   }, [router]);
 
@@ -61,18 +68,20 @@ export default function ProtectedLayout({ children }: ProtectedLayoutProps) {
   };
 
   return (
-    <div className="app">
-      <MobileMenuToggle />
-      <Sidebar onLogout={handleLogout} />
+    <SelectedPatientProvider>
+      <div className="app">
+        <MobileMenuToggle />
+        <Sidebar onLogout={handleLogout} />
 
-      <main className="main">
-        <EmrTopnav onLogout={handleLogout} />
-        <Topbar />
+        <main className="main">
+          <EmrTopnav onLogout={handleLogout} />
+          <Topbar />
 
-        <div className="content">{children}</div>
-      </main>
+          <div className="content">{children}</div>
+        </main>
 
-      <div className="sidebar-overlay" id="sidebarOverlay"></div>
-    </div>
+        <div className="sidebar-overlay" id="sidebarOverlay"></div>
+      </div>
+    </SelectedPatientProvider>
   );
 }
