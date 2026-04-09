@@ -8,10 +8,13 @@ import {
   createPatientProgressNote,
   defaultProgressNotesListFilters,
   defaultProgressNoteTags,
+  getPatientLopRequestOptions,
   getPatientProgressNotes,
   getPatientProgressNoteRecipientOptions,
+  sendPatientLopRequest,
   type PatientProgressNote,
   type ProgressNoteEmailSelection,
+  type ProgressNoteLopRequestOptions,
   type ProgressNoteLawyerSelection,
   type ProgressNotesListFilters,
   type ProgressNotesPagination,
@@ -50,9 +53,12 @@ const progressNoteTypeLabels: Record<number, string> = {
   6: "Admin only",
   7: "Finance",
   8: "Billing Notice",
+  9: "Weekly Note Update",
+  10: "Email Chain",
   11: "Add to treatment plan",
   12: "Notify Intake",
   13: "Notify Referrals",
+  14: "Profile changes",
   15: "Notify Records",
 };
 
@@ -145,6 +151,11 @@ interface ProgressNoteRecipientModalState {
   updateLawyerPortal: boolean;
 }
 
+interface ProgressNoteLopModalState {
+  emails: string[];
+  selectedEmails: string[];
+}
+
 export default function WorkspacePageClient() {
   const router = useRouter();
   const {
@@ -181,7 +192,11 @@ export default function WorkspacePageClient() {
   const [importantToClinicSelection, setImportantToClinicSelection] = useState<ProgressNoteEmailSelection | null>(null);
   const [notifyLawyerSelection, setNotifyLawyerSelection] = useState<ProgressNoteLawyerSelection | null>(null);
   const [recipientModal, setRecipientModal] = useState<ProgressNoteRecipientModalState | null>(null);
+  const [lopRequestModal, setLopRequestModal] = useState<ProgressNoteLopModalState | null>(null);
+  const [lopRequestOptionsLoading, setLopRequestOptionsLoading] = useState(false);
+  const [isSendingLopRequest, setIsSendingLopRequest] = useState(false);
   const notesListRef = useRef<HTMLDivElement | null>(null);
+  const defaultNotesListFiltersRef = useRef(defaultProgressNotesListFilters());
 
   useEffect(() => {
     if (!isHydrated) {
@@ -287,6 +302,7 @@ export default function WorkspacePageClient() {
     setImportantToClinicSelection(null);
     setNotifyLawyerSelection(null);
     setRecipientModal(null);
+    setLopRequestModal(null);
     setProgressNotesMessage("");
     setNotesPage(1);
     setNotesPagination(fallbackNotesPagination);
@@ -384,10 +400,33 @@ export default function WorkspacePageClient() {
   ].join(" | ");
 
   const treatmentPlanValue = `${selectedPatient.name || "Patient"} DOB: ${formatWorkspaceDate(selectedPatient.dob)} DOI: ${formatWorkspaceDate(selectedPatient.doi)} Facility: ${selectedPatient.facility || "N/A"} Last visit: ${formatWorkspaceDate(selectedPatient.lastVisit)} Next visit: ${formatWorkspaceDate(selectedPatient.nextVisit)} Balance: ${formatWorkspaceCurrency(selectedPatient.balance)}.`;
+  const notesFiltersChanged = Object.entries(notesListFilters).some(([key, value]) => {
+    const defaultValue =
+      defaultNotesListFiltersRef.current[key as keyof ProgressNotesListFilters];
+    return value !== defaultValue;
+  });
+  const isNotesListFiltered = noteFilter.trim() !== "" || notesFiltersChanged;
 
   const handleCloseWorkspace = () => {
     clearSelectedPatient();
     router.push("/patients");
+  };
+
+  const handleResetNotesView = () => {
+    setNoteFilter("");
+    setNoteFilterQuery("");
+    setNotesListFilters(defaultProgressNotesListFilters());
+    setNotesPage(1);
+  };
+
+  const handleOpenNoteEditor = () => {
+    if (!isAddNoteOpen) {
+      setIsAddNoteOpen(true);
+    }
+
+    window.setTimeout(() => {
+      document.getElementById("wsNoteText")?.focus();
+    }, 0);
   };
 
   const handleDemographicsFieldChange = (
@@ -601,6 +640,101 @@ export default function WorkspacePageClient() {
     setRecipientModal(null);
   };
 
+  const refreshWorkspaceProgressNotes = async () => {
+    if (!selectedPatient?.pid) {
+      return;
+    }
+
+    const refreshedNotes = await getPatientProgressNotes(
+      selectedPatient.pid,
+      noteFilterQuery,
+      notesPage,
+      notesPagination.pageSize,
+      notesListFilters,
+    );
+
+    setProgressNotes(refreshedNotes.notes);
+    setNotesPagination(refreshedNotes.pagination);
+  };
+
+  const handleOpenLopRequestModal = async () => {
+    if (!selectedPatient.pid) {
+      setProgressNotesMessage("This workspace patient is read-only here. Open from Patients or Dashboard to send LOP.");
+      return;
+    }
+
+    setLopRequestOptionsLoading(true);
+    setProgressNotesMessage("");
+
+    try {
+      const options: ProgressNoteLopRequestOptions = await getPatientLopRequestOptions(selectedPatient.pid);
+      setLopRequestModal({
+        emails: options.emails,
+        selectedEmails: [...options.emails],
+      });
+    } catch (error) {
+      console.error("Failed to load LOP request emails:", error);
+      setProgressNotesMessage("Unable to load LOP request emails right now.");
+    } finally {
+      setLopRequestOptionsLoading(false);
+    }
+  };
+
+  const toggleLopRequestModalEmail = (email: string, checked: boolean) => {
+    setLopRequestModal((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const nextEmails = checked
+        ? Array.from(new Set([...current.selectedEmails, email]))
+        : current.selectedEmails.filter((item) => item !== email);
+
+      return {
+        ...current,
+        selectedEmails: nextEmails,
+      };
+    });
+  };
+
+  const handleSendLopRequest = async () => {
+    if (!selectedPatient?.pid || !lopRequestModal) {
+      return;
+    }
+
+    if (lopRequestModal.selectedEmails.length === 0) {
+      setProgressNotesMessage("Please select at least one email for the LOP request.");
+      return;
+    }
+
+    setIsSendingLopRequest(true);
+    setProgressNotesMessage("");
+
+    try {
+      const result = await sendPatientLopRequest({
+        pid: selectedPatient.pid,
+        note: progressNoteText.trim() || undefined,
+        emails: lopRequestModal.selectedEmails,
+      });
+
+      await refreshWorkspaceProgressNotes();
+
+      setProgressNoteText("");
+      setProgressNoteTags(defaultProgressNoteTags());
+      setImportantToClinicSelection(null);
+      setNotifyLawyerSelection(null);
+      setRecipientModal(null);
+      setLopRequestModal(null);
+      setProgressNotesError("");
+      setProgressNotesMessage(result.message);
+    } catch (error) {
+      console.error("Failed to send LOP request:", error);
+      setProgressNotesMessage("Unable to send LOP request right now.");
+    } finally {
+      setIsSendingLopRequest(false);
+    }
+  };
+
   const handleSaveProgressNote = async () => {
     if (!selectedPatient.pid) {
       setProgressNotesMessage("This workspace patient is read-only here. Open from Patients or Dashboard to add notes.");
@@ -624,15 +758,7 @@ export default function WorkspacePageClient() {
         notifyLawyerSelection,
       });
 
-      const refreshedNotes = await getPatientProgressNotes(
-        selectedPatient.pid,
-        noteFilterQuery,
-        notesPage,
-        notesPagination.pageSize,
-        notesListFilters,
-      );
-      setProgressNotes(refreshedNotes.notes);
-      setNotesPagination(refreshedNotes.pagination);
+      await refreshWorkspaceProgressNotes();
 
       setProgressNoteText("");
       setProgressNoteTags(defaultProgressNoteTags());
@@ -829,8 +955,14 @@ export default function WorkspacePageClient() {
                 >
                   {isSavingProgressNote ? "Saving..." : "Save note"}
                 </button>
-                <button className="mini" id="wsSendLOP">
-                  Send LOP request
+                <button
+                  className="mini"
+                  id="wsSendLOP"
+                  type="button"
+                  disabled={lopRequestOptionsLoading || isSendingLopRequest}
+                  onClick={handleOpenLopRequestModal}
+                >
+                  {lopRequestOptionsLoading ? "Loading LOP..." : isSendingLopRequest ? "Sending LOP..." : "Send LOP request"}
                 </button>
                 <button
                   className="mini"
@@ -1012,18 +1144,19 @@ export default function WorkspacePageClient() {
                 <button
                   className="mini primary"
                   type="button"
-                  onClick={() => document.getElementById("wsNoteText")?.focus()}
+                  onClick={handleOpenNoteEditor}
                 >
                   Add/Edit
                 </button>
-                <button
-                  className="mini"
-                  type="button"
-                  onClick={() => setNoteFilter("")}
-                >
-                  View all
-                </button>
-                <span className="hint">{noteFilter.trim() ? "Filtered" : "All notes"}</span>
+                {isNotesListFiltered && (
+                  <button
+                    className="mini"
+                    type="button"
+                    onClick={handleResetNotesView}
+                  >
+                    Clear filters
+                  </button>
+                )}
               </div>
               <div className="checkgrid" style={{ marginBottom: "10px" }}>
                 <label className="checkline">
@@ -1605,6 +1738,73 @@ export default function WorkspacePageClient() {
           </div>
         </div>
       </div>
+
+      {lopRequestModal && (
+        <div className="modal-backdrop show" role="presentation">
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="workspace-lop-request-modal-title"
+          >
+            <div className="mhead">
+              <div>
+                <div className="mtitle" id="workspace-lop-request-modal-title">
+                  Send LOP Request
+                </div>
+                <div className="hint">
+                  Please confirm the emails before sending this LOP request.
+                </div>
+              </div>
+              <div className="right">
+                <button
+                  className="mini"
+                  type="button"
+                  disabled={isSendingLopRequest}
+                  onClick={() => setLopRequestModal(null)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+            <div className="mbody">
+              {lopRequestModal.emails.length === 0 ? (
+                <div className="softbox hint">No emails added by lawyer in LOP.</div>
+              ) : (
+                <div className="checkgrid">
+                  {lopRequestModal.emails.map((email) => (
+                    <label key={`lop-${email}`} className="checkline">
+                      <input
+                        type="checkbox"
+                        checked={lopRequestModal.selectedEmails.includes(email)}
+                        onChange={(event) => toggleLopRequestModalEmail(email, event.target.checked)}
+                      /> {email}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="mfoot">
+              <button
+                className="mini"
+                type="button"
+                disabled={isSendingLopRequest}
+                onClick={() => setLopRequestModal(null)}
+              >
+                No
+              </button>
+              <button
+                className="mini primary"
+                type="button"
+                disabled={isSendingLopRequest || lopRequestModal.selectedEmails.length === 0}
+                onClick={handleSendLopRequest}
+              >
+                {isSendingLopRequest ? "Sending..." : "Yes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {recipientModal && (
         <div className="modal-backdrop show" role="presentation">

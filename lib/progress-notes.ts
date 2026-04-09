@@ -36,6 +36,10 @@ export interface ProgressNoteRecipientOptions {
   };
 }
 
+export interface ProgressNoteLopRequestOptions {
+  emails: string[];
+}
+
 export interface PatientProgressNote {
   id: number;
   body: string;
@@ -201,9 +205,9 @@ export const defaultProgressNotesListFilters = (): ProgressNotesListFilters => (
   includeNotifyRecords: false,
   includeProfileChanges: false,
   includeAdminOnly: false,
-  excludeAdminOnly: false,
-  excludeWeeklyUpdate: false,
-  excludeCaseInfo: false,
+  excludeAdminOnly: true,
+  excludeWeeklyUpdate: true,
+  excludeCaseInfo: true,
 });
 
 export async function getPatientProgressNotes(
@@ -281,6 +285,47 @@ export async function getPatientProgressNoteRecipientOptions(
       lawyerFollowEmailChain: toBoolean(defaults.lawyerFollowEmailChain),
       lawyerUpdatePortal: toBoolean(defaults.lawyerUpdatePortal),
     },
+  };
+}
+
+export async function getPatientLopRequestOptions(
+  pid: number,
+): Promise<ProgressNoteLopRequestOptions> {
+  const response = await apiRequest<ApiEnvelope>(`get_patient_lop_request_recipients.php?pid=${pid}`, {
+    method: "GET",
+    withAuth: true,
+    cache: "no-store",
+  });
+
+  const payload = response.data && typeof response.data === "object"
+    ? (response.data as Record<string, unknown>)
+    : {};
+
+  return {
+    emails: Array.isArray(payload.emails)
+      ? payload.emails.filter((value): value is string => typeof value === "string" && value.trim() !== "")
+      : [],
+  };
+}
+
+export async function sendPatientLopRequest(input: {
+  pid: number;
+  note?: string;
+  emails: string[];
+}): Promise<{ message: string }> {
+  const response = await apiRequest<ApiEnvelope>("send_patient_lop_request.php", {
+    method: "POST",
+    withAuth: true,
+    cache: "no-store",
+    body: input,
+  });
+
+  const payload = response.data && typeof response.data === "object"
+    ? (response.data as Record<string, unknown>)
+    : {};
+
+  return {
+    message: typeof payload.message === "string" ? payload.message : "Mail successfully sent",
   };
 }
 
