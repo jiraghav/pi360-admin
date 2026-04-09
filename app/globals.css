@@ -869,7 +869,9 @@
   .note .p {
     color: var(--muted);
     margin-top: 6px;
-    font-size: 13px
+    font-size: 13px;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .two-col {

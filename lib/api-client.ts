@@ -1,3 +1,5 @@
+import { selectedWorkspacePatientStorageKey } from "@/lib/workspace";
+
 export type ApiMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export interface ApiRequestOptions<TBody = unknown>
@@ -19,6 +21,21 @@ const getAuthTokenFromStorage = (): string | null => {
     return null;
   }
   return localStorage.getItem("authToken");
+};
+
+const handleUnauthorizedResponse = (): void => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  localStorage.removeItem("authToken");
+  localStorage.removeItem("user");
+  window.sessionStorage.removeItem(selectedWorkspacePatientStorageKey);
+  document.cookie = "authToken=; path=/; max-age=0; SameSite=Strict";
+
+  if (window.location.pathname !== "/login") {
+    window.location.assign("/login");
+  }
 };
 
 const buildUrl = (endpoint: string): string => {
@@ -72,6 +89,11 @@ export async function apiRequest<TResponse, TBody = unknown>(
     body: requestBody,
     ...rest,
   });
+
+  if (response.status === 401) {
+    handleUnauthorizedResponse();
+    throw new Error("Unauthorized");
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
