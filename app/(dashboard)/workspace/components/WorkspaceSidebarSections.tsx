@@ -3,6 +3,7 @@ import {
   formatWorkspaceCurrency,
   formatWorkspaceDate,
 } from "@/lib/workspace";
+import { WorkspaceAppointmentsCard } from "@/app/(dashboard)/workspace/components/WorkspaceAppointmentsCard";
 
 interface WorkspaceSidebarSectionsProps {
   selectedPatient: SelectedWorkspacePatient;
@@ -16,23 +17,7 @@ export function WorkspaceSidebarSections({
   return (
     <>
       <div className="grid">
-        <div className="card">
-          <div className="hd"><div className="title">📅 Appointments</div><div className="sub">(collapsed)</div><div className="right"><button className="mini primary">Add</button></div></div>
-          <div className="bd">
-            <div className="note">
-              <div className="h">
-                <div className="t">Next visit: {formatWorkspaceDate(selectedPatient.nextVisit)}</div>
-                <div className="m">Status: {selectedPatient.status || "Active"}</div>
-              </div>
-              <div className="p">
-                Location: {selectedPatient.facility || "N/A"} | Last visit:{" "}
-                {formatWorkspaceDate(selectedPatient.lastVisit)}
-              </div>
-            </div>
-            <div className="sep"></div>
-            <div className="hint">Recurrent appointments: none</div>
-          </div>
-        </div>
+        <WorkspaceAppointmentsCard selectedPatient={selectedPatient} />
 
         <div className="card">
           <div className="hd"><div className="title">🩺 Diagnoses</div><div className="sub">(collapsed)</div><div className="right"><button className="mini">Edit</button></div></div>
