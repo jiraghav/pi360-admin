@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useSelectedPatient } from "@/app/components/SelectedPatientProvider";
 import { getFacilities, type FacilityOption } from "@/lib/facilities";
 import {
@@ -169,6 +169,8 @@ function createVisitsBillingDraft(patient: PatientListItem): PatientVisitsBillin
   };
 }
 
+const patientsSearchStorageKey = "pi360.patients.search";
+
 export default function PatientsPageClient() {
   const router = useRouter();
   const { selectPatient } = useSelectedPatient();
@@ -176,6 +178,9 @@ export default function PatientsPageClient() {
   const [pagination, setPagination] = useState<PatientsPagination>(fallbackPagination);
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const didInitSearchRef = useRef(false);
+  const skipDebounceOnceRef = useRef(false);
+  const skipPersistOnceRef = useRef(true);
   const [expandedPatientId, setExpandedPatientId] = useState<string | number | null>(null);
   const [facilities, setFacilities] = useState<FacilityOption[]>([]);
   const [facilityError, setFacilityError] = useState("");
@@ -188,6 +193,36 @@ export default function PatientsPageClient() {
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
+    if (didInitSearchRef.current) {
+      return;
+    }
+
+    didInitSearchRef.current = true;
+
+    try {
+      const storedSearch = window.sessionStorage.getItem(patientsSearchStorageKey) ?? "";
+      if (!storedSearch.trim()) {
+        return;
+      }
+
+      skipDebounceOnceRef.current = true;
+      setSearchInput(storedSearch);
+      setSearchQuery(storedSearch.trim());
+      startTransition(() => {
+        setPagination((current) => (current.page === 1 ? current : { ...current, page: 1 }));
+      });
+    } catch {
+      // ignore - localStorage may be unavailable (privacy mode / blocked)
+    }
+  }, []);
+
+  useEffect(() => {
+    if (skipDebounceOnceRef.current) {
+      skipDebounceOnceRef.current = false;
+      setSearchQuery(searchInput.trim());
+      return;
+    }
+
     const timeoutId = window.setTimeout(() => {
       setSearchQuery(searchInput.trim());
     }, 350);
@@ -195,6 +230,24 @@ export default function PatientsPageClient() {
     return () => {
       window.clearTimeout(timeoutId);
     };
+  }, [searchInput]);
+
+  useEffect(() => {
+    if (skipPersistOnceRef.current) {
+      skipPersistOnceRef.current = false;
+      return;
+    }
+
+    try {
+      const nextValue = searchInput.trim() ? searchInput : "";
+      if (nextValue) {
+        window.sessionStorage.setItem(patientsSearchStorageKey, nextValue);
+      } else {
+        window.sessionStorage.removeItem(patientsSearchStorageKey);
+      }
+    } catch {
+      // ignore - localStorage may be unavailable (privacy mode / blocked)
+    }
   }, [searchInput]);
 
   useEffect(() => {
@@ -658,7 +711,7 @@ export default function PatientsPageClient() {
                         <div className="sep"></div>
                         <div className="two-col">
                           <div className="field">
-                            <label>Name</label>
+                            <label>Name *</label>
                             <input
                               value={draft.name}
                               onChange={(event) => handleDraftChange(patient, "name", event.target.value)}
@@ -679,7 +732,7 @@ export default function PatientsPageClient() {
                             />
                           </div>
                           <div className="field">
-                            <label>Facility</label>
+                            <label>Facility *</label>
                             <input
                               list="patients-facility-options"
                               value={draft.facilityName}
