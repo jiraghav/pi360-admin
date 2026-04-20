@@ -4,6 +4,7 @@ import {
   formatWorkspaceDate,
 } from "@/lib/workspace";
 import { WorkspaceAppointmentsCard } from "@/app/(dashboard)/workspace/components/WorkspaceAppointmentsCard";
+import { WorkspaceDiagnosesCard } from "@/app/(dashboard)/workspace/components/WorkspaceDiagnosesCard";
 
 interface WorkspaceSidebarSectionsProps {
   selectedPatient: SelectedWorkspacePatient;
@@ -19,10 +20,7 @@ export function WorkspaceSidebarSections({
       <div className="grid">
         <WorkspaceAppointmentsCard selectedPatient={selectedPatient} />
 
-        <div className="card">
-          <div className="hd"><div className="title">🩺 Diagnoses</div><div className="sub">(collapsed)</div><div className="right"><button className="mini">Edit</button></div></div>
-          <div className="bd"><div className="hint">Nothing recorded</div></div>
-        </div>
+        <WorkspaceDiagnosesCard selectedPatient={selectedPatient} />
 
         <div className="card">
           <div className="hd"><div className="title">✅ Case Checklist + Report Tracking</div><div className="right"><button className="mini">Edit</button></div></div>

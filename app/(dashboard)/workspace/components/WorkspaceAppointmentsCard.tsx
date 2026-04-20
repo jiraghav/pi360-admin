@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   createPatientAppointment,
   deletePatientAppointment,
@@ -16,6 +16,8 @@ import type { SelectedWorkspacePatient } from "@/lib/workspace";
 interface WorkspaceAppointmentsCardProps {
   selectedPatient: SelectedWorkspacePatient;
 }
+
+const appointmentsOpenStorageKey = "pi360.ws.sidebar.appointments.open";
 
 interface AppointmentDraft {
   categoryId: number;
@@ -314,6 +316,7 @@ function RecurringAppointmentSection({
 
 export function WorkspaceAppointmentsCard({ selectedPatient }: WorkspaceAppointmentsCardProps) {
   const [isOpen, setIsOpen] = useState(true);
+  const skipPersistOpenOnceRef = useRef(true);
   const [appointments, setAppointments] = useState<PatientAppointment[]>([]);
   const [recurringAppointments, setRecurringAppointments] = useState<RecurringPatientAppointment[]>([]);
   const [pastAppointments, setPastAppointments] = useState<PatientAppointment[]>([]);
@@ -338,6 +341,30 @@ export function WorkspaceAppointmentsCard({ selectedPatient }: WorkspaceAppointm
   const [facilitySearch, setFacilitySearch] = useState("");
   const [providerSearch, setProviderSearch] = useState("");
   const [appointmentDraft, setAppointmentDraft] = useState<AppointmentDraft>(emptyDraft);
+
+  useEffect(() => {
+    try {
+      const storedValue = window.sessionStorage.getItem(appointmentsOpenStorageKey);
+      if (storedValue === "0") {
+        queueMicrotask(() => setIsOpen(false));
+      }
+    } catch {
+      // ignore - storage may be unavailable
+    }
+  }, []);
+
+  useEffect(() => {
+    if (skipPersistOpenOnceRef.current) {
+      skipPersistOpenOnceRef.current = false;
+      return;
+    }
+
+    try {
+      window.sessionStorage.setItem(appointmentsOpenStorageKey, isOpen ? "1" : "0");
+    } catch {
+      // ignore - storage may be unavailable
+    }
+  }, [isOpen]);
 
   const fetchAppointments = async (isMountedRef?: { current: boolean }) => {
     if (!selectedPatient.pid) {

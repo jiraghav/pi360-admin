@@ -43,6 +43,10 @@ import {
   formatWorkspaceDate,
 } from "@/lib/workspace";
 
+const workspaceDemographicsOpenStorageKey = "pi360.ws.card.demographics.open";
+const workspaceAddNoteOpenStorageKey = "pi360.ws.card.add-note.open";
+const workspaceUpdatesOpenStorageKey = "pi360.ws.card.updates.open";
+
 export default function WorkspacePageClient() {
   const router = useRouter();
   const {
@@ -51,15 +55,39 @@ export default function WorkspacePageClient() {
     selectPatient,
     clearSelectedPatient,
   } = useSelectedPatient();
-  const [isDemographicsOpen, setIsDemographicsOpen] = useState(true);
+  const [isDemographicsOpen, setIsDemographicsOpen] = useState(() => {
+    try {
+      return typeof window === "undefined"
+        ? true
+        : window.sessionStorage.getItem(workspaceDemographicsOpenStorageKey) !== "0";
+    } catch {
+      return true;
+    }
+  });
   const [demographicsDraft, setDemographicsDraft] = useState<WorkspaceDemographicsDraft | null>(null);
   const [isSavingDemographics, setIsSavingDemographics] = useState(false);
   const [demographicsSaveMessage, setDemographicsSaveMessage] = useState("");
   const [demographicsSaveError, setDemographicsSaveError] = useState(false);
   const [facilities, setFacilities] = useState<FacilityOption[]>([]);
   const [facilityError, setFacilityError] = useState("");
-  const [isAddNoteOpen, setIsAddNoteOpen] = useState(true);
-  const [isUpdatesOpen, setIsUpdatesOpen] = useState(true);
+  const [isAddNoteOpen, setIsAddNoteOpen] = useState(() => {
+    try {
+      return typeof window === "undefined"
+        ? true
+        : window.sessionStorage.getItem(workspaceAddNoteOpenStorageKey) !== "0";
+    } catch {
+      return true;
+    }
+  });
+  const [isUpdatesOpen, setIsUpdatesOpen] = useState(() => {
+    try {
+      return typeof window === "undefined"
+        ? true
+        : window.sessionStorage.getItem(workspaceUpdatesOpenStorageKey) !== "0";
+    } catch {
+      return true;
+    }
+  });
   const previousPatientKeyRef = useRef<string | null>(null);
   const [progressNoteText, setProgressNoteText] = useState("");
   const [progressNoteTags, setProgressNoteTags] = useState<ProgressNoteTagState>(defaultProgressNoteTags());
@@ -94,6 +122,30 @@ export default function WorkspacePageClient() {
       router.replace("/patients");
     }
   }, [isHydrated, router, selectedPatient]);
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(workspaceDemographicsOpenStorageKey, isDemographicsOpen ? "1" : "0");
+    } catch {
+      // ignore - storage may be unavailable
+    }
+  }, [isDemographicsOpen]);
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(workspaceAddNoteOpenStorageKey, isAddNoteOpen ? "1" : "0");
+    } catch {
+      // ignore - storage may be unavailable
+    }
+  }, [isAddNoteOpen]);
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(workspaceUpdatesOpenStorageKey, isUpdatesOpen ? "1" : "0");
+    } catch {
+      // ignore - storage may be unavailable
+    }
+  }, [isUpdatesOpen]);
 
   useEffect(() => {
     let isMounted = true;
