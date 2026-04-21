@@ -1,10 +1,16 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
 import type { SelectedWorkspacePatient } from "@/lib/workspace";
 import {
   formatWorkspaceCurrency,
   formatWorkspaceDate,
 } from "@/lib/workspace";
+import { getPatientCaseChecklist, type PatientCaseChecklist, type PatientReportTrackingRow } from "@/lib/case-checklist";
 import { WorkspaceAppointmentsCard } from "@/app/(dashboard)/workspace/components/WorkspaceAppointmentsCard";
 import { WorkspaceDiagnosesCard } from "@/app/(dashboard)/workspace/components/WorkspaceDiagnosesCard";
+
+const caseChecklistOpenStorageKey = "pi360.ws.sidebar.caseChecklist.open";
 
 interface WorkspaceSidebarSectionsProps {
   selectedPatient: SelectedWorkspacePatient;
@@ -15,6 +21,81 @@ export function WorkspaceSidebarSections({
   selectedPatient,
   treatmentPlanValue,
 }: WorkspaceSidebarSectionsProps) {
+  const [isCaseChecklistOpen, setIsCaseChecklistOpen] = useState(false);
+  const skipPersistCaseChecklistOnceRef = useRef(true);
+  const [caseChecklist, setCaseChecklist] = useState<PatientCaseChecklist | null>(null);
+  const [caseChecklistReports, setCaseChecklistReports] = useState<PatientReportTrackingRow[]>([]);
+  const [caseChecklistLoading, setCaseChecklistLoading] = useState(false);
+  const [caseChecklistError, setCaseChecklistError] = useState("");
+
+  useEffect(() => {
+    try {
+      const storedValue = window.sessionStorage.getItem(caseChecklistOpenStorageKey);
+      if (storedValue === "1") {
+        queueMicrotask(() => setIsCaseChecklistOpen(true));
+      }
+    } catch {
+      // ignore - storage may be unavailable
+    }
+  }, []);
+
+  useEffect(() => {
+    if (skipPersistCaseChecklistOnceRef.current) {
+      skipPersistCaseChecklistOnceRef.current = false;
+      return;
+    }
+
+    try {
+      window.sessionStorage.setItem(caseChecklistOpenStorageKey, isCaseChecklistOpen ? "1" : "0");
+    } catch {
+      // ignore - storage may be unavailable
+    }
+  }, [isCaseChecklistOpen]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadChecklist = async () => {
+      if (!selectedPatient.pid) {
+        setCaseChecklist(null);
+        setCaseChecklistReports([]);
+        setCaseChecklistLoading(false);
+        setCaseChecklistError("");
+        return;
+      }
+
+      setCaseChecklistLoading(true);
+      setCaseChecklistError("");
+
+      try {
+        const data = await getPatientCaseChecklist(selectedPatient.pid);
+        if (!isMounted) {
+          return;
+        }
+        setCaseChecklist(data.checklist);
+        setCaseChecklistReports(data.reports);
+      } catch (error) {
+        console.error("Failed to load case checklist:", error);
+        if (!isMounted) {
+          return;
+        }
+        setCaseChecklist(null);
+        setCaseChecklistReports([]);
+        setCaseChecklistError("Unable to load case checklist right now.");
+      } finally {
+        if (isMounted) {
+          setCaseChecklistLoading(false);
+        }
+      }
+    };
+
+    void loadChecklist();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedPatient.pid]);
+
   return (
     <>
       <div className="grid">
@@ -23,30 +104,126 @@ export function WorkspaceSidebarSections({
         <WorkspaceDiagnosesCard selectedPatient={selectedPatient} />
 
         <div className="card">
-          <div className="hd"><div className="title">✅ Case Checklist + Report Tracking</div><div className="right"><button className="mini">Edit</button></div></div>
-          <div className="bd">
-            <div className="checkgrid">
-              <label className="checkline"><input type="checkbox" /> Intake</label>
-              <label className="checkline"><input type="checkbox" /> Liability cleared</label>
-              <label className="checkline"><input type="checkbox" /> Police report</label>
-              <label className="checkline"><input type="checkbox" /> Underinsured</label>
-              <label className="checkline"><input type="checkbox" /> Uninsured</label>
-              <label className="checkline"><input type="checkbox" /> LOP</label>
-              <label className="checkline"><input type="checkbox" /> Hospital records received</label>
-              <label className="checkline"><input type="checkbox" defaultChecked /> Bills and records</label>
+          <div className="hd">
+            <div className="title">✅ Case Checklist + Report Tracking</div>
+            <div className="sub">{isCaseChecklistOpen ? "(expanded)" : "(collapsed)"}</div>
+            <div className="right">
+              <button className="mini" type="button" onClick={() => setIsCaseChecklistOpen((current) => !current)}>
+                {isCaseChecklistOpen ? "Collapse" : "Expand"}
+              </button>
             </div>
-            <div className="hr"></div>
-            <table className="table">
-              <thead><tr><th>Report Name</th><th>Sent</th><th>Report received</th></tr></thead>
-              <tbody>
-                <tr><td>Chiro report</td><td><span className="chip warn">Pending</span></td><td>-</td></tr>
-                <tr><td>MRI report</td><td><span className="chip">-</span></td><td><span className="chip good">Received</span></td></tr>
-                <tr><td>Neuro report</td><td><span className="chip">-</span></td><td>-</td></tr>
-                <tr><td>Ortho report</td><td><span className="chip">-</span></td><td>-</td></tr>
-                <tr><td>Pain report</td><td><span className="chip">-</span></td><td>-</td></tr>
-              </tbody>
-            </table>
           </div>
+          {isCaseChecklistOpen && (
+            <div className="bd">
+              {caseChecklistLoading && <div className="hint">Loading case checklist...</div>}
+              {!caseChecklistLoading && caseChecklistError && (
+                <div className="hint" style={{ color: "var(--bad)" }}>
+                  {caseChecklistError}
+                </div>
+              )}
+              <div className="checkgrid">
+                <label className="checkline">
+                  <input type="checkbox" disabled checked={Boolean(caseChecklist?.hasIdUploaded)} readOnly /> ID
+                </label>
+                <label className="checkline">
+                  <input type="checkbox" disabled checked={Boolean(caseChecklist?.hasIntakeUploaded)} readOnly /> Intake
+                </label>
+                <label className="checkline">
+                  <input type="checkbox" disabled checked={Boolean(caseChecklist?.liabilityCleared)} readOnly /> Liability Cleared
+                </label>
+                <div className="checkline" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <input type="checkbox" disabled checked={Boolean(caseChecklist?.limits)} readOnly />
+                  <span>Limit</span>
+                  <span className="chip">{caseChecklist?.limits ?? "-"}</span>
+                </div>
+                <label className="checkline">
+                  <input type="checkbox" disabled checked={Boolean(caseChecklist?.policeReport)} readOnly /> Police report
+                </label>
+                <label className="checkline">
+                  <input type="checkbox" disabled checked={Boolean(caseChecklist?.underinsured)} readOnly /> Underinsured
+                </label>
+                <label className="checkline">
+                  <input type="checkbox" disabled checked={Boolean(caseChecklist?.uninsured)} readOnly /> Uninsured
+                </label>
+                <label className="checkline">
+                  <input type="checkbox" disabled checked={Boolean(caseChecklist?.hasLopUploaded)} readOnly /> LOP
+                </label>
+                <label className="checkline">
+                  <input
+                    type="checkbox"
+                    disabled
+                    checked={Boolean(caseChecklist?.hasOswestryDisabilityIndexUploaded)}
+                    readOnly
+                  />{" "}
+                  Oswestry Disability Index
+                </label>
+                <label className="checkline">
+                  <input
+                    type="checkbox"
+                    disabled
+                    checked={Boolean(caseChecklist?.hasHeadacheDisabilityIndexUploaded)}
+                    readOnly
+                  />{" "}
+                  Headache Disability Index
+                </label>
+                <label className="checkline">
+                  <input
+                    type="checkbox"
+                    disabled
+                    checked={Boolean(caseChecklist?.hasDutiesPerformedUnderDuressUploaded)}
+                    readOnly
+                  />{" "}
+                  Duties Performed Under Duress at Work and Home
+                </label>
+                <label className="checkline">
+                  <input
+                    type="checkbox"
+                    disabled
+                    checked={Boolean(caseChecklist?.hasHospitalRecordsReceivedUploaded)}
+                    readOnly
+                  />{" "}
+                  Hospital records received
+                </label>
+                <label className="checkline">
+                  <input type="checkbox" disabled checked={Boolean(caseChecklist?.hasLienSentOutUploaded)} readOnly /> Lien sent out
+                </label>
+                <label className="checkline">
+                  <input
+                    type="checkbox"
+                    disabled
+                    checked={Boolean(caseChecklist?.hasBillsAndRecordsUploaded)}
+                    readOnly
+                  />{" "}
+                  Bills and Records
+                </label>
+              </div>
+              <div className="hr"></div>
+              <table className="table">
+                <thead><tr><th>Report Name</th><th>Sent</th><th>Report received</th></tr></thead>
+                <tbody>
+                  {caseChecklistReports.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="hint">
+                        No report tracking yet.
+                      </td>
+                    </tr>
+                  )}
+                  {caseChecklistReports.map((row) => {
+                    const sentLabel = row.sentDates.join(", ");
+                    const receivedLabel = row.receivedDates.join(", ");
+
+                    return (
+                      <tr key={row.key}>
+                        <td>{row.title}</td>
+                        <td>{sentLabel ? <span className="chip good">✓ {sentLabel}</span> : "-"}</td>
+                        <td>{receivedLabel ? <span className="chip good">✓ {receivedLabel}</span> : "-"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         <div className="card">
