@@ -385,6 +385,7 @@ export function WorkspaceDiagnosesCard({ selectedPatient }: { selectedPatient: S
                               <div className="t" style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                                 <span style={{ fontWeight: 950 }}>{item.issueTitle || "Diagnosis"}</span>
                                 {item.subtypeTitle && <span className="chip">{item.subtypeTitle}</span>}
+                                {item.codes && <span className="chip">{item.codes}</span>}
                               </div>
                             </div>
                             <div style={{ display: "flex", gap: "8px" }}>
