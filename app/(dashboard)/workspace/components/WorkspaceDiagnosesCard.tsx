@@ -27,6 +27,7 @@ const emptyDraft: DiagnosisDraft = {
 export function WorkspaceDiagnosesCard({ selectedPatient }: { selectedPatient: SelectedWorkspacePatient }) {
   const [isOpen, setIsOpen] = useState(false);
   const skipPersistOnceRef = useRef(true);
+  const miniToggleStyle = { minWidth: "74px", textAlign: "center" } as const;
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [draft, setDraft] = useState<DiagnosisDraft>(emptyDraft);
@@ -223,7 +224,12 @@ export function WorkspaceDiagnosesCard({ selectedPatient }: { selectedPatient: S
           <button className="mini" type="button" onClick={openAddModal}>
             Manage
           </button>
-          <button className="mini" type="button" onClick={() => setIsOpen((current) => !current)}>
+          <button
+            className="mini"
+            type="button"
+            style={miniToggleStyle}
+            onClick={() => setIsOpen((current) => !current)}
+          >
             {isOpen ? "Collapse" : "Expand"}
           </button>
         </div>

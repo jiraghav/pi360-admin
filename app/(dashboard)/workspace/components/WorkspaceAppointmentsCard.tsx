@@ -315,8 +315,9 @@ function RecurringAppointmentSection({
 }
 
 export function WorkspaceAppointmentsCard({ selectedPatient }: WorkspaceAppointmentsCardProps) {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
   const skipPersistOpenOnceRef = useRef(true);
+  const miniToggleStyle = { minWidth: "74px", textAlign: "center" } as const;
   const [appointments, setAppointments] = useState<PatientAppointment[]>([]);
   const [recurringAppointments, setRecurringAppointments] = useState<RecurringPatientAppointment[]>([]);
   const [pastAppointments, setPastAppointments] = useState<PatientAppointment[]>([]);
@@ -345,7 +346,9 @@ export function WorkspaceAppointmentsCard({ selectedPatient }: WorkspaceAppointm
   useEffect(() => {
     try {
       const storedValue = window.sessionStorage.getItem(appointmentsOpenStorageKey);
-      if (storedValue === "0") {
+      if (storedValue === "1") {
+        queueMicrotask(() => setIsOpen(true));
+      } else if (storedValue === "0") {
         queueMicrotask(() => setIsOpen(false));
       }
     } catch {
@@ -823,7 +826,12 @@ export function WorkspaceAppointmentsCard({ selectedPatient }: WorkspaceAppointm
                 Add
               </button>
             )}
-            <button className="mini" type="button" onClick={() => setIsOpen((current) => !current)}>
+            <button
+              className="mini"
+              type="button"
+              style={miniToggleStyle}
+              onClick={() => setIsOpen((current) => !current)}
+            >
               {isOpen ? "Collapse" : "Expand"}
             </button>
           </div>
@@ -835,9 +843,6 @@ export function WorkspaceAppointmentsCard({ selectedPatient }: WorkspaceAppointm
               <div className="hint" style={{ color: "var(--bad)" }}>
                 {appointmentActionError}
               </div>
-            )}
-            {!canManageAppointments && (
-              <div className="hint">Appointment management is unavailable for this role.</div>
             )}
             <AppointmentSection
               title="Appointments"

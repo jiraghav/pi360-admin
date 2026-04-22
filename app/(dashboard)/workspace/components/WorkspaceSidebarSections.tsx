@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { SelectedWorkspacePatient } from "@/lib/workspace";
 import {
   formatWorkspaceCurrency,
   formatWorkspaceDate,
 } from "@/lib/workspace";
 import { getPatientCaseChecklist, type PatientCaseChecklist, type PatientReportTrackingRow } from "@/lib/case-checklist";
+import { downloadPatient837, getPatientClaims, type PatientClaimRow } from "@/lib/claims";
 import {
   getPatientCustomReportData,
   markPatientProfileReviewed,
@@ -19,6 +20,8 @@ import { WorkspaceDiagnosesCard } from "@/app/(dashboard)/workspace/components/W
 
 const caseChecklistOpenStorageKey = "pi360.ws.sidebar.caseChecklist.open";
 const customizeReportOpenStorageKey = "pi360.ws.sidebar.customizeReport.open";
+const claimsOpenStorageKey = "pi360.ws.sidebar.claims.open";
+const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 interface WorkspaceSidebarSectionsProps {
   selectedPatient: SelectedWorkspacePatient;
@@ -33,10 +36,18 @@ export function WorkspaceSidebarSections({
   const skipPersistCaseChecklistOnceRef = useRef(true);
   const [isCustomizeReportOpen, setIsCustomizeReportOpen] = useState(false);
   const skipPersistCustomizeReportOnceRef = useRef(true);
+  const [isClaimsOpen, setIsClaimsOpen] = useState(false);
+  const skipPersistClaimsOnceRef = useRef(true);
   const [caseChecklist, setCaseChecklist] = useState<PatientCaseChecklist | null>(null);
   const [caseChecklistReports, setCaseChecklistReports] = useState<PatientReportTrackingRow[]>([]);
   const [caseChecklistLoading, setCaseChecklistLoading] = useState(false);
   const [caseChecklistError, setCaseChecklistError] = useState("");
+
+  const [claims, setClaims] = useState<PatientClaimRow[]>([]);
+  const [selectedClaimEncounters, setSelectedClaimEncounters] = useState<number[]>([]);
+  const [claimsLoading, setClaimsLoading] = useState(false);
+  const [claimsDownloading, setClaimsDownloading] = useState(false);
+  const [claimsError, setClaimsError] = useState("");
 
   const [customReportLoading, setCustomReportLoading] = useState(false);
   const [customReportSaving, setCustomReportSaving] = useState(false);
@@ -58,22 +69,33 @@ export function WorkspaceSidebarSections({
   const [customProfileUpToDateTime, setCustomProfileUpToDateTime] = useState<string | null>(null);
   const [customLastMarkedReviewed, setCustomLastMarkedReviewed] = useState<string | null>(null);
 
-  useEffect(() => {
+  useClientLayoutEffect(() => {
     try {
       const storedValue = window.sessionStorage.getItem(caseChecklistOpenStorageKey);
       if (storedValue === "1") {
-        queueMicrotask(() => setIsCaseChecklistOpen(true));
+        setIsCaseChecklistOpen(true);
       }
     } catch {
       // ignore - storage may be unavailable
     }
   }, []);
 
-  useEffect(() => {
+  useClientLayoutEffect(() => {
     try {
       const storedValue = window.sessionStorage.getItem(customizeReportOpenStorageKey);
       if (storedValue === "1") {
-        queueMicrotask(() => setIsCustomizeReportOpen(true));
+        setIsCustomizeReportOpen(true);
+      }
+    } catch {
+      // ignore - storage may be unavailable
+    }
+  }, []);
+
+  useClientLayoutEffect(() => {
+    try {
+      const storedValue = window.sessionStorage.getItem(claimsOpenStorageKey);
+      if (storedValue === "1") {
+        setIsClaimsOpen(true);
       }
     } catch {
       // ignore - storage may be unavailable
@@ -105,6 +127,19 @@ export function WorkspaceSidebarSections({
       // ignore - storage may be unavailable
     }
   }, [isCustomizeReportOpen]);
+
+  useEffect(() => {
+    if (skipPersistClaimsOnceRef.current) {
+      skipPersistClaimsOnceRef.current = false;
+      return;
+    }
+
+    try {
+      window.sessionStorage.setItem(claimsOpenStorageKey, isClaimsOpen ? "1" : "0");
+    } catch {
+      // ignore - storage may be unavailable
+    }
+  }, [isClaimsOpen]);
 
   useEffect(() => {
     let isMounted = true;
@@ -223,6 +258,101 @@ export function WorkspaceSidebarSections({
     };
   }, [selectedPatient.pid]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadClaims = async () => {
+      if (!selectedPatient.pid || !isClaimsOpen) {
+        setClaims([]);
+        setSelectedClaimEncounters([]);
+        setClaimsLoading(false);
+        setClaimsDownloading(false);
+        setClaimsError("");
+        return;
+      }
+
+      setClaimsLoading(true);
+      setClaimsError("");
+
+      try {
+        const rows = await getPatientClaims(selectedPatient.pid);
+        if (!isMounted) {
+          return;
+        }
+        setClaims(rows);
+        setSelectedClaimEncounters([]);
+      } catch (error) {
+        console.error("Failed to load claims:", error);
+        if (!isMounted) {
+          return;
+        }
+        setClaims([]);
+        setSelectedClaimEncounters([]);
+        setClaimsError("Unable to load claims right now.");
+      } finally {
+        if (isMounted) {
+          setClaimsLoading(false);
+        }
+      }
+    };
+
+    void loadClaims();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isClaimsOpen, selectedPatient.pid]);
+
+  const setClaimEncounterSelected = (encounterId: number, selected: boolean) => {
+    setSelectedClaimEncounters((current) => {
+      const hasEncounter = current.includes(encounterId);
+      if (selected) {
+        return hasEncounter ? current : [...current, encounterId];
+      }
+      return hasEncounter ? current.filter((id) => id !== encounterId) : current;
+    });
+  };
+
+  const handleSelectAllClaims = () => {
+    setSelectedClaimEncounters(claims.map((row) => row.encounter));
+  };
+
+  const handleDeselectAllClaims = () => {
+    setSelectedClaimEncounters([]);
+  };
+
+  const handleDownload837 = async () => {
+    if (!selectedPatient.pid) {
+      return;
+    }
+
+    if (selectedClaimEncounters.length === 0) {
+      setClaimsError("Select at least one claim to download.");
+      return;
+    }
+
+    setClaimsDownloading(true);
+    setClaimsError("");
+
+    try {
+      const result = await downloadPatient837(selectedPatient.pid, selectedClaimEncounters);
+      const blob = new Blob([result.content], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = result.filename || "claims_837.txt";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Failed to download 837:", error);
+      setClaimsError("Unable to download 837 files right now.");
+    } finally {
+      setClaimsDownloading(false);
+    }
+  };
+
   const handleSaveCustomReport = async (action: "save" | "save_share") => {
     if (!selectedPatient.pid) {
       return;
@@ -328,7 +458,11 @@ export function WorkspaceSidebarSections({
             <div className="title">✅ Case Checklist + Report Tracking</div>
             <div className="sub">{isCaseChecklistOpen ? "(expanded)" : "(collapsed)"}</div>
             <div className="right">
-              <button className="mini" type="button" onClick={() => setIsCaseChecklistOpen((current) => !current)}>
+              <button
+                className="mini"
+                type="button"
+                onClick={() => setIsCaseChecklistOpen((current) => !current)}
+              >
                 {isCaseChecklistOpen ? "Collapse" : "Expand"}
               </button>
             </div>
@@ -451,27 +585,33 @@ export function WorkspaceSidebarSections({
             <div className="title">Customize Report</div>
             <div className="sub">{isCustomizeReportOpen ? "(expanded)" : "(collapsed)"}</div>
             <div className="right">
-              {isCustomizeReportOpen && (
-                <>
-                  <button
-                    className="mini"
-                    type="button"
-                    disabled={customReportSaving}
-                    onClick={() => void handleSaveCustomReport("save")}
-                  >
-                    {customReportSaving ? "Saving..." : "Save"}
-                  </button>
-                  <button
-                    className="mini primary"
-                    type="button"
-                    disabled={customReportSaving}
-                    onClick={() => void handleSaveCustomReport("save_share")}
-                  >
-                    {customReportSaving ? "Saving..." : "Save & Share with Lawyer"}
-                  </button>
-                </>
-              )}
-              <button className="mini" type="button" onClick={() => setIsCustomizeReportOpen((current) => !current)}>
+              <button
+                className="mini"
+                type="button"
+                style={isCustomizeReportOpen ? undefined : { visibility: "hidden" }}
+                aria-hidden={!isCustomizeReportOpen}
+                tabIndex={isCustomizeReportOpen ? 0 : -1}
+                disabled={!isCustomizeReportOpen || customReportSaving}
+                onClick={() => void handleSaveCustomReport("save")}
+              >
+                {customReportSaving ? "Saving..." : "Save"}
+              </button>
+              <button
+                className="mini primary"
+                type="button"
+                style={isCustomizeReportOpen ? undefined : { visibility: "hidden" }}
+                aria-hidden={!isCustomizeReportOpen}
+                tabIndex={isCustomizeReportOpen ? 0 : -1}
+                disabled={!isCustomizeReportOpen || customReportSaving}
+                onClick={() => void handleSaveCustomReport("save_share")}
+              >
+                {customReportSaving ? "Saving..." : "Save & Share with Lawyer"}
+              </button>
+              <button
+                className="mini"
+                type="button"
+                onClick={() => setIsCustomizeReportOpen((current) => !current)}
+              >
                 {isCustomizeReportOpen ? "Collapse" : "Expand"}
               </button>
             </div>
@@ -682,15 +822,81 @@ export function WorkspaceSidebarSections({
 
       <div className="grid">
         <div className="card">
-          <div className="hd"><div className="title">Claims</div><div className="sub">(collapsed)</div><div className="right"><button className="mini">Select all</button><button className="mini">Deselect all</button></div></div>
-          <div className="bd">
-            <div className="claims-list" id="claimsList">
-              <div className="claim-item"><div>{formatWorkspaceDate(selectedPatient.doi)} - Intake</div><span>{selectedPatient.status || "Open"}</span></div>
-              <div className="claim-item"><div>{formatWorkspaceDate(selectedPatient.lastVisit)} - Office Visit</div><span>Office Visit</span></div>
-              <div className="claim-item"><div>{formatWorkspaceDate(selectedPatient.nextVisit)} - Scheduled Follow-up</div><span>Scheduled</span></div>
+          <div className="hd">
+            <div className="title">Claims</div>
+            <div className="sub">{isClaimsOpen ? "(expanded)" : "(collapsed)"}</div>
+            <div className="right">
+              {isClaimsOpen && (
+                <>
+                  <button
+                    className="mini"
+                    type="button"
+                    onClick={handleSelectAllClaims}
+                    disabled={claimsLoading || claims.length === 0}
+                  >
+                    Select all
+                  </button>
+                  <button
+                    className="mini"
+                    type="button"
+                    onClick={handleDeselectAllClaims}
+                    disabled={claimsLoading || selectedClaimEncounters.length === 0}
+                  >
+                    Deselect all
+                  </button>
+                </>
+              )}
+              <button
+                className="mini"
+                type="button"
+                onClick={() => setIsClaimsOpen((current) => !current)}
+              >
+                {isClaimsOpen ? "Collapse" : "Expand"}
+              </button>
             </div>
-            <div className="actions-row"><button className="mini primary">Download 837 Files</button></div>
           </div>
+          {isClaimsOpen && (
+            <div className="bd">
+              <div className="claims-list" id="claimsList">
+                {claimsLoading && <div className="hint">Loading claims...</div>}
+                {!claimsLoading && claimsError && (
+                  <div className="hint" style={{ color: "var(--bad)" }}>
+                    {claimsError}
+                  </div>
+                )}
+                {!claimsLoading && !claimsError && claims.length === 0 && <div className="hint">None</div>}
+                {!claimsLoading &&
+                  !claimsError &&
+                  claims.map((row) => {
+                    const isSelected = selectedClaimEncounters.includes(row.encounter);
+
+                    return (
+                      <div key={row.encounter} className="claim-item">
+                        <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(event) => setClaimEncounterSelected(row.encounter, event.target.checked)}
+                          />
+                          <span>{row.label}</span>
+                        </label>
+                        <span>{row.lineCount ? `${row.lineCount} lines` : ""}</span>
+                      </div>
+                    );
+                  })}
+              </div>
+              <div className="actions-row">
+                <button
+                  className="mini primary"
+                  type="button"
+                  onClick={() => void handleDownload837()}
+                  disabled={claimsDownloading || claimsLoading || selectedClaimEncounters.length === 0}
+                >
+                  {claimsDownloading ? "Preparing..." : "Download 837 Files"}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="card">

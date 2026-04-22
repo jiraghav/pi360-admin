@@ -842,6 +842,12 @@
     transform: translateY(0px)
   }
 
+  .mini:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+    transform: none;
+  }
+
   .note {
     border: 1px solid var(--border);
     border-radius: 14px;

@@ -46,6 +46,10 @@ const buildUrl = (endpoint: string): string => {
   return `${getBaseUrl()}/${cleanEndpoint}`;
 };
 
+const inFlightRequests = new Map<string, Promise<unknown>>();
+const recentGetCache = new Map<string, { expiresAt: number; value: unknown }>();
+const recentGetCacheTtlMs = 250;
+
 export async function apiRequest<TResponse, TBody = unknown>(
   endpoint: string,
   options: ApiRequestOptions<TBody> = {}
@@ -83,7 +87,54 @@ export async function apiRequest<TResponse, TBody = unknown>(
     }
   }
 
-  const response = await fetch(buildUrl(endpoint), {
+  const url = buildUrl(endpoint);
+  const dedupeKey = `${method.toUpperCase()}|${url}|${resolvedToken ?? ""}`;
+
+  if (method === "GET" && requestBody === undefined) {
+    const cached = recentGetCache.get(dedupeKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.value as TResponse;
+    }
+
+    const existing = inFlightRequests.get(dedupeKey);
+    if (existing) {
+      return existing as Promise<TResponse>;
+    }
+
+    const promise = (async () => {
+      const response = await fetch(url, {
+        method,
+        headers: requestHeaders,
+        body: requestBody,
+        ...rest,
+      });
+
+      if (response.status === 401) {
+        handleUnauthorizedResponse();
+        throw new Error("Unauthorized");
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `Request failed with status ${response.status}`);
+      }
+
+      if (response.status === 204) {
+        return undefined as TResponse;
+      }
+
+      const json = (await response.json()) as TResponse;
+      recentGetCache.set(dedupeKey, { expiresAt: Date.now() + recentGetCacheTtlMs, value: json });
+      return json;
+    })().finally(() => {
+      inFlightRequests.delete(dedupeKey);
+    });
+
+    inFlightRequests.set(dedupeKey, promise as Promise<unknown>);
+    return promise;
+  }
+
+  const response = await fetch(url, {
     method,
     headers: requestHeaders,
     body: requestBody,
