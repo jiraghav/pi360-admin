@@ -41,7 +41,9 @@ import { savePatientDemographics } from "@/lib/patients";
 import {
   formatWorkspaceCurrency,
   formatWorkspaceDate,
+  formatWorkspacePhone,
 } from "@/lib/workspace";
+import { getPatientCopyDetails } from "@/lib/patient-details";
 
 const workspaceDemographicsOpenStorageKey = "pi360.ws.card.demographics.open";
 const workspaceAddNoteOpenStorageKey = "pi360.ws.card.add-note.open";
@@ -120,6 +122,17 @@ export default function WorkspacePageClient() {
   const [isSendingLopRequest, setIsSendingLopRequest] = useState(false);
   const notesListRef = useRef<HTMLDivElement | null>(null);
   const defaultNotesListFiltersRef = useRef(defaultProgressNotesListFilters());
+  const copyDetailsResetTimerRef = useRef<number | null>(null);
+  const [copyDetailsLabel, setCopyDetailsLabel] = useState("Copy Details");
+  const [copyDetailsBusy, setCopyDetailsBusy] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (copyDetailsResetTimerRef.current) {
+        window.clearTimeout(copyDetailsResetTimerRef.current);
+      }
+    };
+  }, []);
 
   const setAllWorkspaceCardsOpen = (open: boolean) => {
     setIsDemographicsOpen(open);
@@ -399,6 +412,93 @@ export default function WorkspacePageClient() {
   const handleCloseWorkspace = () => {
     clearSelectedPatient();
     router.push("/patients");
+  };
+
+  const copyTextToClipboard = async (text: string) => {
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "true");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    document.body.removeChild(textarea);
+  };
+
+  const formatPhoneForCopy = (value: string) => {
+    const digits = value.replace(/\D/g, "");
+    const normalizedDigits = digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
+    if (normalizedDigits.length !== 10) {
+      return value || "N/A";
+    }
+    return `${normalizedDigits.slice(0, 3)}-${normalizedDigits.slice(3, 6)}-${normalizedDigits.slice(6)}`;
+  };
+
+  const buildAddressLine = (address?: { street: string | null; city: string | null; state: string | null; postalCode: string | null } | null) => {
+    if (!address) {
+      return "";
+    }
+    const parts = [address.street, address.city, address.state, address.postalCode].filter((part) => Boolean(part && part.trim()));
+    return parts.join(", ");
+  };
+
+  const handleCopyDetails = async () => {
+    if (copyDetailsBusy) {
+      return;
+    }
+
+    setCopyDetailsBusy(true);
+    setCopyDetailsLabel("Copying...");
+
+    let details = null as Awaited<ReturnType<typeof getPatientCopyDetails>>;
+    try {
+      details = selectedPatient.pid ? await getPatientCopyDetails(selectedPatient.pid) : null;
+    } catch (error) {
+      console.error("Failed to load copy details:", error);
+      details = null;
+    }
+    const nameLine = details?.name || selectedPatient.name || "Unnamed patient";
+    const dobLine = details?.dob || formatWorkspaceDate(selectedPatient.dob);
+    const doiLine = details?.doi || formatWorkspaceDate(selectedPatient.doi);
+    const phoneLine = details?.phone
+      ? formatPhoneForCopy(details.phone)
+      : formatPhoneForCopy(formatWorkspacePhone(selectedPatient.phone));
+    const lawyerLine = details?.lawyer || "";
+    const addressLine = buildAddressLine(details?.address ?? null);
+
+    const text = [
+      `Name: ${nameLine}`,
+      `DOB: ${dobLine}`,
+      `DOI: ${doiLine}`,
+      `Phone: ${phoneLine}`,
+      `Lawyer: ${lawyerLine}`,
+      `Address: ${addressLine}`,
+    ].join("\n");
+
+    try {
+      await copyTextToClipboard(text);
+      setCopyDetailsLabel("Copied!");
+    } catch (error) {
+      console.error("Failed to copy workspace details:", error);
+      setCopyDetailsLabel("Copy failed");
+    } finally {
+      setCopyDetailsBusy(false);
+
+      if (copyDetailsResetTimerRef.current) {
+        window.clearTimeout(copyDetailsResetTimerRef.current);
+      }
+
+      copyDetailsResetTimerRef.current = window.setTimeout(() => {
+        setCopyDetailsLabel("Copy Details");
+      }, 2000);
+    }
   };
 
   const handleResetNotesView = () => {
@@ -760,6 +860,9 @@ export default function WorkspacePageClient() {
         onCloseWorkspace={handleCloseWorkspace}
         onExpandAllCards={() => setAllWorkspaceCardsOpen(true)}
         onCollapseAllCards={() => setAllWorkspaceCardsOpen(false)}
+        onCopyDetails={() => void handleCopyDetails()}
+        copyDetailsLabel={copyDetailsLabel}
+        copyDetailsDisabled={copyDetailsBusy}
       />
 
       <div className="workspace-grid">

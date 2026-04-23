@@ -974,28 +974,26 @@ export function WorkspaceSidebarSections({
             <div className="title">Customize Report</div>
             <div className="sub">{isCustomizeReportOpen ? "(expanded)" : "(collapsed)"}</div>
             <div className="right">
-              <button
-                className="mini"
-                type="button"
-                style={isCustomizeReportOpen ? undefined : { visibility: "hidden" }}
-                aria-hidden={!isCustomizeReportOpen}
-                tabIndex={isCustomizeReportOpen ? 0 : -1}
-                disabled={!isCustomizeReportOpen || customReportSaving}
-                onClick={() => void handleSaveCustomReport("save")}
-              >
-                {customReportSaving ? "Saving..." : "Save"}
-              </button>
-              <button
-                className="mini primary"
-                type="button"
-                style={isCustomizeReportOpen ? undefined : { visibility: "hidden" }}
-                aria-hidden={!isCustomizeReportOpen}
-                tabIndex={isCustomizeReportOpen ? 0 : -1}
-                disabled={!isCustomizeReportOpen || customReportSaving}
-                onClick={() => void handleSaveCustomReport("save_share")}
-              >
-                {customReportSaving ? "Saving..." : "Save & Share with Lawyer"}
-              </button>
+              {isCustomizeReportOpen && (
+                <>
+                  <button
+                    className="mini"
+                    type="button"
+                    disabled={customReportSaving}
+                    onClick={() => void handleSaveCustomReport("save")}
+                  >
+                    {customReportSaving ? "Saving..." : "Save"}
+                  </button>
+                  <button
+                    className="mini primary"
+                    type="button"
+                    disabled={customReportSaving}
+                    onClick={() => void handleSaveCustomReport("save_share")}
+                  >
+                    {customReportSaving ? "Saving..." : "Save & Share with Lawyer"}
+                  </button>
+                </>
+              )}
               <button
                 className="mini"
                 type="button"
@@ -1293,28 +1291,26 @@ export function WorkspaceSidebarSections({
             <div className="title">🧾 Treatment Plan</div>
             <div className="sub">{isTreatmentPlanOpen ? "(expanded)" : "(collapsed)"}</div>
             <div className="right">
-              <button
-                className="mini primary"
-                type="button"
-                style={isTreatmentPlanOpen ? undefined : { visibility: "hidden" }}
-                aria-hidden={!isTreatmentPlanOpen}
-                tabIndex={isTreatmentPlanOpen ? 0 : -1}
-                disabled={!isTreatmentPlanOpen || treatmentPlanSaving || !treatmentPlanDirty}
-                onClick={() => void handleSaveTreatmentPlan("save_share")}
-              >
-                {treatmentPlanSaving ? "Saving..." : "Save & Share with Lawyer"}
-              </button>
-              <button
-                className="mini"
-                type="button"
-                style={isTreatmentPlanOpen ? undefined : { visibility: "hidden" }}
-                aria-hidden={!isTreatmentPlanOpen}
-                tabIndex={isTreatmentPlanOpen ? 0 : -1}
-                disabled={!isTreatmentPlanOpen || treatmentPlanSaving || !treatmentPlanDirty}
-                onClick={() => void handleSaveTreatmentPlan("save")}
-              >
-                {treatmentPlanSaving ? "Saving..." : "Save"}
-              </button>
+              {isTreatmentPlanOpen && (
+                <>
+                  <button
+                    className="mini primary"
+                    type="button"
+                    disabled={treatmentPlanSaving || !treatmentPlanDirty}
+                    onClick={() => void handleSaveTreatmentPlan("save_share")}
+                  >
+                    {treatmentPlanSaving ? "Saving..." : "Save & Share with Lawyer"}
+                  </button>
+                  <button
+                    className="mini"
+                    type="button"
+                    disabled={treatmentPlanSaving || !treatmentPlanDirty}
+                    onClick={() => void handleSaveTreatmentPlan("save")}
+                  >
+                    {treatmentPlanSaving ? "Saving..." : "Save"}
+                  </button>
+                </>
+              )}
               <button className="mini" type="button" onClick={() => setIsTreatmentPlanOpen((current) => !current)}>
                 {isTreatmentPlanOpen ? "Collapse" : "Expand"}
               </button>
@@ -1425,8 +1421,9 @@ export function WorkspaceSidebarSections({
               </div>
             </div>
             <div className="hr"></div>
-            <table border={0} style={{ width: "100%" }}>
-              <tbody>
+            <div style={{ width: "100%", overflowX: "auto" }}>
+              <table border={0} style={{ width: "100%", minWidth: "520px" }}>
+                <tbody>
                 <tr>
                   <td></td>
                   {billingColumns.map((col) => (
@@ -1549,8 +1546,9 @@ export function WorkspaceSidebarSections({
                     {formatWorkspaceCurrency(billingTotals.availableFunds)}
                   </td>
                 </tr>
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
             <div className="hr"></div>
           </div>
         </div>

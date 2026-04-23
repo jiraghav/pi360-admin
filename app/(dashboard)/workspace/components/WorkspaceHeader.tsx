@@ -4,6 +4,9 @@ interface WorkspaceHeaderProps {
   onCloseWorkspace: () => void;
   onExpandAllCards?: () => void;
   onCollapseAllCards?: () => void;
+  onCopyDetails?: () => void;
+  copyDetailsLabel?: string;
+  copyDetailsDisabled?: boolean;
 }
 
 export function WorkspaceHeader({
@@ -12,6 +15,9 @@ export function WorkspaceHeader({
   onCloseWorkspace,
   onExpandAllCards,
   onCollapseAllCards,
+  onCopyDetails,
+  copyDetailsLabel,
+  copyDetailsDisabled,
 }: WorkspaceHeaderProps) {
   return (
     <div className="workspace-header">
@@ -50,26 +56,28 @@ export function WorkspaceHeader({
         </a>
       </div>
       <div className="spacer"></div>
-      {(onExpandAllCards || onCollapseAllCards) && (
-        <div className="row" style={{ marginBottom: "8px" }}>
-          {onExpandAllCards && (
-            <button className="btn secondary" type="button" onClick={onExpandAllCards}>
-              Expand all
-            </button>
-          )}
-          {onCollapseAllCards && (
-            <button className="btn secondary" type="button" onClick={onCollapseAllCards}>
-              Collapse all
-            </button>
-          )}
-        </div>
-      )}
-      <div className="row">
+      <div className="row wrap">
+        {onExpandAllCards && (
+          <button className="btn secondary" type="button" onClick={onExpandAllCards}>
+            Expand all
+          </button>
+        )}
+        {onCollapseAllCards && (
+          <button className="btn secondary" type="button" onClick={onCollapseAllCards}>
+            Collapse all
+          </button>
+        )}
         <button className="btn secondary" type="button" onClick={onCloseWorkspace}>
           Close Workspace
         </button>
-        <button className="btn secondary" id="wsCopyDetails">
-          Copy Details
+        <button
+          className="btn secondary"
+          id="wsCopyDetails"
+          type="button"
+          onClick={onCopyDetails}
+          disabled={copyDetailsDisabled}
+        >
+          {copyDetailsLabel ?? "Copy Details"}
         </button>
       </div>
     </div>

@@ -1116,7 +1116,7 @@
   .workspace-grid {
     margin-top: 12px;
     display: grid;
-    grid-template-columns: 1.05fr 1fr 1.05fr;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr) minmax(0, 1.05fr);
     gap: 12px;
     align-items: start;
   }
@@ -1432,6 +1432,35 @@
 
   /* Tablet specific (768px) */
   @media (max-width: 768px) {
+    .card .hd {
+      grid-template-columns: 1fr;
+    }
+
+    .card .hd .title {
+      white-space: normal;
+    }
+
+    .card .hd .right {
+      grid-column: 1;
+      grid-row: 3;
+      justify-self: stretch;
+      width: 100%;
+      justify-content: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .workspace-header .quicklinks {
+      width: 100%;
+      overflow-x: auto;
+      flex-wrap: nowrap;
+      white-space: nowrap;
+      padding-bottom: 2px;
+    }
+
+    .workspace-header .quicklinks a {
+      flex: 0 0 auto;
+    }
+
     .patients-card-head {
       flex-direction: column;
       align-items: stretch;
@@ -1821,8 +1850,13 @@
     }
 
     .workspace-grid {
-      gap: 10px;
+      margin-top: 8px;
+      gap: 8px;
       grid-template-columns: 1fr
+    }
+
+    .workspace-grid .grid {
+      gap: 8px;
     }
 
     .checkgrid {
@@ -1913,6 +1947,15 @@
 
     .content {
       padding: 6px
+    }
+
+    .workspace-grid {
+      margin-top: 6px;
+      gap: 6px;
+    }
+
+    .workspace-grid .grid {
+      gap: 6px;
     }
 
     .card .hd {
