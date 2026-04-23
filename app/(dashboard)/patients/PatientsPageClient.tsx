@@ -11,7 +11,21 @@ import {
   type PatientListItem,
   type PatientsPagination,
 } from "@/lib/patients";
+import {
+  createPatientProgressNote,
+  defaultProgressNoteTags,
+  getPatientProgressNoteRecipientOptions,
+  type ProgressNoteEmailSelection,
+  type ProgressNoteLawyerSelection,
+  type ProgressNoteRecipientOptions,
+  type ProgressNoteTagState,
+} from "@/lib/progress-notes";
 import { createWorkspacePatientFromListItem } from "@/lib/workspace";
+import { WorkspaceProgressNoteCard } from "@/app/(dashboard)/workspace/components/WorkspaceProgressNoteCard";
+import { RecipientModal } from "@/app/(dashboard)/workspace/components/RecipientModal";
+import type {
+  ProgressNoteRecipientModalState,
+} from "@/app/(dashboard)/workspace/types";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -170,6 +184,8 @@ function createVisitsBillingDraft(patient: PatientListItem): PatientVisitsBillin
 }
 
 const patientsSearchStorageKey = "pi360.patients.search";
+const workspaceAddNoteOpenStorageKey = "pi360.ws.card.add-note.open";
+const workspaceUpdatesOpenStorageKey = "pi360.ws.card.updates.open";
 
 export default function PatientsPageClient() {
   const router = useRouter();
@@ -188,9 +204,67 @@ export default function PatientsPageClient() {
   const [patientVisitsDrafts, setPatientVisitsDrafts] = useState<Record<string, PatientVisitsBillingDraft>>({});
   const [saveStateByPatient, setSaveStateByPatient] = useState<Record<string, { status: "idle" | "saving" | "saved" | "error"; message: string }>>({});
   const [visitsSaveStateByPatient, setVisitsSaveStateByPatient] = useState<Record<string, { status: "idle" | "saving" | "saved" | "error"; message: string }>>({});
+  const [notesBodyByPatient, setNotesBodyByPatient] = useState<Record<string, string>>({});
+  const [notesSaveStateByPatient, setNotesSaveStateByPatient] = useState<Record<string, { status: "idle" | "saving" | "saved" | "error"; message: string }>>({});
+  const [progressNoteTagsByPatient, setProgressNoteTagsByPatient] = useState<Record<string, ProgressNoteTagState>>({});
+  const [importantToClinicSelectionByPatient, setImportantToClinicSelectionByPatient] = useState<Record<string, ProgressNoteEmailSelection | null>>({});
+  const [notifyLawyerSelectionByPatient, setNotifyLawyerSelectionByPatient] = useState<Record<string, ProgressNoteLawyerSelection | null>>({});
+  const [recipientOptionsByPatient, setRecipientOptionsByPatient] = useState<Record<string, ProgressNoteRecipientOptions | null>>({});
+  const [recipientOptionsLoadingByPatient, setRecipientOptionsLoadingByPatient] = useState<Record<string, boolean>>({});
+  const [recipientOptionsErrorByPatient, setRecipientOptionsErrorByPatient] = useState<Record<string, string>>({});
+  const [recipientModal, setRecipientModal] = useState<{ patientKey: string; state: ProgressNoteRecipientModalState } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
+
+  const expandedPatient =
+    expandedPatientId == null
+      ? null
+      : patients.find((patient) => getPatientKey(patient) === expandedPatientId) ?? null;
+
+  useEffect(() => {
+    if (!expandedPatient?.pid) {
+      return;
+    }
+
+    const patientKey = String(getPatientKey(expandedPatient));
+    const hasRecipientOptions = Object.prototype.hasOwnProperty.call(recipientOptionsByPatient, patientKey);
+    if (hasRecipientOptions || recipientOptionsLoadingByPatient[patientKey]) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const fetchRecipientOptions = async () => {
+      setRecipientOptionsLoadingByPatient((current) => ({ ...current, [patientKey]: true }));
+      setRecipientOptionsErrorByPatient((current) => ({ ...current, [patientKey]: "" }));
+
+      try {
+        const data = await getPatientProgressNoteRecipientOptions(expandedPatient.pid as number);
+        if (!isMounted) {
+          return;
+        }
+        setRecipientOptionsByPatient((current) => ({ ...current, [patientKey]: data }));
+      } catch (err) {
+        console.error("Failed to load recipient options:", err);
+        if (!isMounted) {
+          return;
+        }
+        setRecipientOptionsByPatient((current) => ({ ...current, [patientKey]: null }));
+        setRecipientOptionsErrorByPatient((current) => ({ ...current, [patientKey]: "Notification email options could not be loaded." }));
+      } finally {
+        if (isMounted) {
+          setRecipientOptionsLoadingByPatient((current) => ({ ...current, [patientKey]: false }));
+        }
+      }
+    };
+
+    void fetchRecipientOptions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [expandedPatient?.pid, expandedPatientId]);
 
   useEffect(() => {
     if (didInitSearchRef.current) {
@@ -557,6 +631,298 @@ export default function PatientsPageClient() {
     router.push("/workspace");
   };
 
+  const handleViewAllNotes = (patient: PatientListItem) => {
+    try {
+      window.sessionStorage.setItem(workspaceAddNoteOpenStorageKey, "0");
+      window.sessionStorage.setItem(workspaceUpdatesOpenStorageKey, "1");
+    } catch {
+      // ignore - sessionStorage may be unavailable (privacy mode / blocked)
+    }
+
+    handleOpenWorkspace(patient);
+  };
+
+  const handleNotesBodyChange = (patientKey: string, value: string) => {
+    setNotesBodyByPatient((current) => ({
+      ...current,
+      [patientKey]: value,
+    }));
+  };
+
+  const handleSaveNote = async (patient: PatientListItem) => {
+    const patientKey = String(getPatientKey(patient));
+    const body = (notesBodyByPatient[patientKey] ?? "").trim();
+
+    if (!body) {
+      setNotesSaveStateByPatient((current) => ({
+        ...current,
+        [patientKey]: { status: "error", message: "Please enter a note first." },
+      }));
+      return;
+    }
+
+    if (!patient.pid) {
+      setNotesSaveStateByPatient((current) => ({
+        ...current,
+        [patientKey]: { status: "error", message: "Notes are available once a patient record with an id is selected." },
+      }));
+      return;
+    }
+
+    const tags = progressNoteTagsByPatient[patientKey] ?? defaultProgressNoteTags();
+    const importantToClinicSelection = importantToClinicSelectionByPatient[patientKey] ?? null;
+    const notifyLawyerSelection = notifyLawyerSelectionByPatient[patientKey] ?? null;
+
+    setNotesSaveStateByPatient((current) => ({
+      ...current,
+      [patientKey]: { status: "saving", message: "" },
+    }));
+
+    try {
+      const result = await createPatientProgressNote({
+        pid: patient.pid,
+        body,
+        tags,
+        importantToClinicSelection,
+        notifyLawyerSelection,
+      });
+
+      setNotesBodyByPatient((current) => ({
+        ...current,
+        [patientKey]: "",
+      }));
+      setProgressNoteTagsByPatient((current) => ({
+        ...current,
+        [patientKey]: defaultProgressNoteTags(),
+      }));
+      setImportantToClinicSelectionByPatient((current) => ({
+        ...current,
+        [patientKey]: null,
+      }));
+      setNotifyLawyerSelectionByPatient((current) => ({
+        ...current,
+        [patientKey]: null,
+      }));
+
+      setNotesSaveStateByPatient((current) => ({
+        ...current,
+        [patientKey]: { status: "saved", message: result.message },
+      }));
+    } catch (err) {
+      console.error("Failed to save progress note:", err);
+      setNotesSaveStateByPatient((current) => ({
+        ...current,
+        [patientKey]: { status: "error", message: "Unable to save note right now." },
+      }));
+    }
+  };
+
+  const handleProgressNoteTagChange = (
+    patient: PatientListItem,
+    field: keyof ProgressNoteTagState,
+    checked: boolean,
+  ) => {
+    const patientKey = String(getPatientKey(patient));
+    const recipientOptions = recipientOptionsByPatient[patientKey] ?? null;
+
+    if (field === "importantToClinic") {
+      if (!checked) {
+        setProgressNoteTagsByPatient((current) => ({
+          ...current,
+          [patientKey]: {
+            ...(current[patientKey] ?? defaultProgressNoteTags()),
+            importantToClinic: false,
+          },
+        }));
+        setImportantToClinicSelectionByPatient((current) => ({ ...current, [patientKey]: null }));
+        if (recipientModal?.patientKey === patientKey && recipientModal.state.type === "importantToClinic") {
+          setRecipientModal(null);
+        }
+        return;
+      }
+
+      setRecipientModal({
+        patientKey,
+        state: {
+          type: "importantToClinic",
+          selectedEmails: [
+            ...(importantToClinicSelectionByPatient[patientKey]?.emails ?? recipientOptions?.clinicEmails ?? []),
+          ],
+          followEmailChain:
+            importantToClinicSelectionByPatient[patientKey]?.followEmailChain ??
+            recipientOptions?.defaults.clinicFollowEmailChain ??
+            false,
+          updateLawyerPortal: false,
+        },
+      });
+      return;
+    }
+
+    if (field === "notifyLawyer") {
+      if (!checked) {
+        setProgressNoteTagsByPatient((current) => ({
+          ...current,
+          [patientKey]: {
+            ...(current[patientKey] ?? defaultProgressNoteTags()),
+            notifyLawyer: false,
+          },
+        }));
+        setNotifyLawyerSelectionByPatient((current) => ({ ...current, [patientKey]: null }));
+        if (recipientModal?.patientKey === patientKey && recipientModal.state.type === "notifyLawyer") {
+          setRecipientModal(null);
+        }
+        return;
+      }
+
+      setRecipientModal({
+        patientKey,
+        state: {
+          type: "notifyLawyer",
+          selectedEmails: [
+            ...(notifyLawyerSelectionByPatient[patientKey]?.emails ?? recipientOptions?.lawyerEmails ?? []),
+          ],
+          followEmailChain:
+            notifyLawyerSelectionByPatient[patientKey]?.followEmailChain ??
+            recipientOptions?.defaults.lawyerFollowEmailChain ??
+            false,
+          updateLawyerPortal:
+            notifyLawyerSelectionByPatient[patientKey]?.updateLawyerPortal ??
+            recipientOptions?.defaults.lawyerUpdatePortal ??
+            false,
+        },
+      });
+      return;
+    }
+
+    setProgressNoteTagsByPatient((current) => ({
+      ...current,
+      [patientKey]: {
+        ...(current[patientKey] ?? defaultProgressNoteTags()),
+        [field]: checked,
+      },
+    }));
+  };
+
+  const toggleRecipientModalEmail = (email: string, checked: boolean) => {
+    setRecipientModal((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const nextEmails = checked
+        ? Array.from(new Set([...current.state.selectedEmails, email]))
+        : current.state.selectedEmails.filter((item) => item !== email);
+
+      return {
+        ...current,
+        state: {
+          ...current.state,
+          selectedEmails: nextEmails,
+        },
+      };
+    });
+  };
+
+  const handleRecipientModalCancel = () => {
+    if (!recipientModal) {
+      return;
+    }
+
+    const patientKey = recipientModal.patientKey;
+
+    if (recipientModal.state.type === "importantToClinic") {
+      setProgressNoteTagsByPatient((current) => ({
+        ...current,
+        [patientKey]: {
+          ...(current[patientKey] ?? defaultProgressNoteTags()),
+          importantToClinic: false,
+        },
+      }));
+      setImportantToClinicSelectionByPatient((current) => ({ ...current, [patientKey]: null }));
+    }
+
+    if (recipientModal.state.type === "notifyLawyer") {
+      setProgressNoteTagsByPatient((current) => ({
+        ...current,
+        [patientKey]: {
+          ...(current[patientKey] ?? defaultProgressNoteTags()),
+          notifyLawyer: false,
+        },
+      }));
+      setNotifyLawyerSelectionByPatient((current) => ({ ...current, [patientKey]: null }));
+    }
+
+    setRecipientModal(null);
+  };
+
+  const handleRecipientModalSave = () => {
+    if (!recipientModal) {
+      return;
+    }
+
+    const patientKey = recipientModal.patientKey;
+
+    if (recipientModal.state.type === "importantToClinic") {
+      if (recipientModal.state.selectedEmails.length === 0) {
+        setProgressNoteTagsByPatient((current) => ({
+          ...current,
+          [patientKey]: {
+            ...(current[patientKey] ?? defaultProgressNoteTags()),
+            importantToClinic: false,
+          },
+        }));
+        setImportantToClinicSelectionByPatient((current) => ({ ...current, [patientKey]: null }));
+      } else {
+        setProgressNoteTagsByPatient((current) => ({
+          ...current,
+          [patientKey]: {
+            ...(current[patientKey] ?? defaultProgressNoteTags()),
+            importantToClinic: true,
+          },
+        }));
+        setImportantToClinicSelectionByPatient((current) => ({
+          ...current,
+          [patientKey]: {
+            emails: recipientModal.state.selectedEmails,
+            followEmailChain: recipientModal.state.followEmailChain,
+          },
+        }));
+      }
+    }
+
+    if (recipientModal.state.type === "notifyLawyer") {
+      if (recipientModal.state.selectedEmails.length === 0) {
+        setProgressNoteTagsByPatient((current) => ({
+          ...current,
+          [patientKey]: {
+            ...(current[patientKey] ?? defaultProgressNoteTags()),
+            notifyLawyer: false,
+          },
+        }));
+        setNotifyLawyerSelectionByPatient((current) => ({ ...current, [patientKey]: null }));
+      } else {
+        setProgressNoteTagsByPatient((current) => ({
+          ...current,
+          [patientKey]: {
+            ...(current[patientKey] ?? defaultProgressNoteTags()),
+            notifyLawyer: true,
+          },
+        }));
+        setNotifyLawyerSelectionByPatient((current) => ({
+          ...current,
+          [patientKey]: {
+            emails: recipientModal.state.selectedEmails,
+            followEmailChain: recipientModal.state.followEmailChain,
+            updateLawyerPortal: recipientModal.state.updateLawyerPortal,
+          },
+        }));
+      }
+    }
+
+    setRecipientModal(null);
+  };
+
+
   return (
     <section className="patients-page">
       <div className="card patients-card">
@@ -771,7 +1137,6 @@ export default function PatientsPageClient() {
                           >
                             {saveState.status === "saving" ? "Saving..." : "Save"}
                           </button>
-                          <button className="mini" type="button">Open facility</button>
                         </div>
                         {saveState.message && (
                           <div
@@ -816,20 +1181,6 @@ export default function PatientsPageClient() {
                               onChange={(event) => handleVisitsDraftChange(patient, "balance", event.target.value)}
                             />
                           </div>
-                          <div className="field">
-                            <label>Payment status</label>
-                            <select
-                              value={visitsDraft.paymentStatus}
-                              onChange={(event) => handleVisitsDraftChange(patient, "paymentStatus", event.target.value)}
-                            >
-                              <option>Balance due</option>
-                              <option>Paid</option>
-                              <option>In review</option>
-                            </select>
-                          </div>
-                        </div>
-                        <div className="hint" style={{ marginTop: "8px" }}>
-                          Visits, next visit, and current bill amount are saved to the backend. Payment status remains a UI helper here.
                         </div>
                         <div className="actions-row">
                           <button
@@ -840,7 +1191,6 @@ export default function PatientsPageClient() {
                           >
                             {visitsSaveState.status === "saving" ? "Saving..." : "Save updates"}
                           </button>
-                          <button className="mini" type="button">Upload doc</button>
                         </div>
                         {visitsSaveState.message && (
                           <div
@@ -855,21 +1205,42 @@ export default function PatientsPageClient() {
                         )}
                       </div>
 
-                      <div className="softbox">
-                        <div style={{ fontWeight: 950 }}>Notes</div>
-                        <div className="sep"></div>
-                        <div className="field">
-                          <label>Add note</label>
-                          <textarea placeholder="Quick note for CIC / clinic / lawyer (as appropriate)"></textarea>
-                        </div>
-                        <div className="actions-row">
-                          <button className="mini primary" type="button">Add note</button>
-                          <button className="mini" type="button">View all notes</button>
-                        </div>
-                        <div className="hint" style={{ marginTop: "8px" }}>
-                          Tip: use checkbox tags (Urgent / Notify Lawyer / Admin only) in the full workspace for structured routing.
-                        </div>
-                      </div>
+                      {(() => {
+                        const patientKey = String(getPatientKey(patient));
+                        const isOpen = true;
+                        const progressNoteText = notesBodyByPatient[patientKey] ?? "";
+                        const progressNoteTags = progressNoteTagsByPatient[patientKey] ?? defaultProgressNoteTags();
+                        const saveState = notesSaveStateByPatient[patientKey] ?? { status: "idle", message: "" };
+                        const recipientOptionsLoading = recipientOptionsLoadingByPatient[patientKey] ?? false;
+                        const recipientOptionsError = recipientOptionsErrorByPatient[patientKey] ?? "";
+
+                        return (
+                          <WorkspaceProgressNoteCard
+                            isOpen={isOpen}
+                            showToggleButton={false}
+                            progressNoteText={progressNoteText}
+                            progressNoteTags={progressNoteTags}
+                            recipientOptionsLoading={recipientOptionsLoading}
+                            recipientOptionsError={recipientOptionsError}
+                            importantToClinicSelection={importantToClinicSelectionByPatient[patientKey] ?? null}
+                            notifyLawyerSelection={notifyLawyerSelectionByPatient[patientKey] ?? null}
+                            progressNotesMessage={saveState.message}
+                            isSavingProgressNote={saveState.status === "saving"}
+                            lopRequestOptionsLoading={false}
+                            isSendingLopRequest={false}
+                            secondaryAction={{
+                              label: "View all notes",
+                              onClick: () => handleViewAllNotes(patient),
+                              id: "patientsViewAllNotes",
+                            }}
+                            onToggleOpen={() => {}}
+                            onSaveNote={() => void handleSaveNote(patient)}
+                            onOpenLopRequestModal={() => {}}
+                            onNoteChange={(value) => handleNotesBodyChange(patientKey, value)}
+                            onTagChange={(field, checked) => handleProgressNoteTagChange(patient, field, checked)}
+                          />
+                        );
+                      })()}
                     </div>
                   </div>
                 )}
@@ -937,6 +1308,48 @@ export default function PatientsPageClient() {
           </div>
         </div>
       </div>
+
+      {recipientModal && (
+        <RecipientModal
+          recipientModal={recipientModal.state}
+          activeRecipientEmails={(() => {
+            const options = recipientOptionsByPatient[recipientModal.patientKey];
+            if (!options) {
+              return [];
+            }
+            return recipientModal.state.type === "importantToClinic" ? options.clinicEmails : options.lawyerEmails;
+          })()}
+          onCancel={handleRecipientModalCancel}
+          onToggleEmail={toggleRecipientModalEmail}
+          onToggleFollowEmailChain={(checked) =>
+            setRecipientModal((current) =>
+              current
+                ? {
+                    ...current,
+                    state: {
+                      ...current.state,
+                      followEmailChain: checked,
+                    },
+                  }
+                : current,
+            )
+          }
+          onToggleUpdateLawyerPortal={(checked) =>
+            setRecipientModal((current) =>
+              current
+                ? {
+                    ...current,
+                    state: {
+                      ...current.state,
+                      updateLawyerPortal: checked,
+                    },
+                  }
+                : current,
+            )
+          }
+          onSave={handleRecipientModalSave}
+        />
+      )}
     </section>
   );
 }

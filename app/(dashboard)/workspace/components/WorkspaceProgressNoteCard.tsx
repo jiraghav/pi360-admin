@@ -6,6 +6,13 @@ import type {
 
 interface WorkspaceProgressNoteCardProps {
   isOpen: boolean;
+  showToggleButton?: boolean;
+  secondaryAction?: {
+    label: string;
+    onClick: () => void;
+    disabled?: boolean;
+    id?: string;
+  };
   progressNoteText: string;
   progressNoteTags: ProgressNoteTagState;
   recipientOptionsLoading: boolean;
@@ -25,6 +32,8 @@ interface WorkspaceProgressNoteCardProps {
 
 export function WorkspaceProgressNoteCard({
   isOpen,
+  showToggleButton = true,
+  secondaryAction,
   progressNoteText,
   progressNoteTags,
   recipientOptionsLoading,
@@ -60,22 +69,36 @@ export function WorkspaceProgressNoteCard({
               {isSavingProgressNote ? "Saving..." : "Save note"}
             </button>
           )}
-          <button
-            className="mini"
-            id="wsSendLOP"
-            type="button"
-            disabled={lopRequestOptionsLoading || isSendingLopRequest}
-            onClick={onOpenLopRequestModal}
-          >
-            {lopRequestOptionsLoading
-              ? "Loading LOP..."
-              : isSendingLopRequest
-                ? "Sending LOP..."
-                : "Send LOP request"}
-          </button>
-          <button className="mini" type="button" onClick={onToggleOpen}>
-            {isOpen ? "Collapse" : "Expand"}
-          </button>
+          {secondaryAction ? (
+            <button
+              className="mini"
+              id={secondaryAction.id}
+              type="button"
+              disabled={secondaryAction.disabled}
+              onClick={secondaryAction.onClick}
+            >
+              {secondaryAction.label}
+            </button>
+          ) : (
+            <button
+              className="mini"
+              id="wsSendLOP"
+              type="button"
+              disabled={lopRequestOptionsLoading || isSendingLopRequest}
+              onClick={onOpenLopRequestModal}
+            >
+              {lopRequestOptionsLoading
+                ? "Loading LOP..."
+                : isSendingLopRequest
+                  ? "Sending LOP..."
+                  : "Send LOP request"}
+            </button>
+          )}
+          {showToggleButton && (
+            <button className="mini" type="button" onClick={onToggleOpen}>
+              {isOpen ? "Collapse" : "Expand"}
+            </button>
+          )}
         </div>
       </div>
       {isOpen && (
