@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   createPatientAppointment,
   deletePatientAppointment,
@@ -18,6 +18,8 @@ interface WorkspaceAppointmentsCardProps {
 }
 
 const appointmentsOpenStorageKey = "pi360.ws.sidebar.appointments.open";
+const workspaceToggleAllCardsEventName = "pi360:workspace:toggleAllCards";
+const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 interface AppointmentDraft {
   categoryId: number;
@@ -315,7 +317,7 @@ function RecurringAppointmentSection({
 }
 
 export function WorkspaceAppointmentsCard({ selectedPatient }: WorkspaceAppointmentsCardProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
   const skipPersistOpenOnceRef = useRef(true);
   const miniToggleStyle = { minWidth: "74px", textAlign: "center" } as const;
   const [appointments, setAppointments] = useState<PatientAppointment[]>([]);
@@ -343,17 +345,31 @@ export function WorkspaceAppointmentsCard({ selectedPatient }: WorkspaceAppointm
   const [providerSearch, setProviderSearch] = useState("");
   const [appointmentDraft, setAppointmentDraft] = useState<AppointmentDraft>(emptyDraft);
 
-  useEffect(() => {
+  useClientLayoutEffect(() => {
     try {
       const storedValue = window.sessionStorage.getItem(appointmentsOpenStorageKey);
-      if (storedValue === "1") {
-        queueMicrotask(() => setIsOpen(true));
-      } else if (storedValue === "0") {
-        queueMicrotask(() => setIsOpen(false));
-      }
+      setIsOpen(storedValue !== "0");
     } catch {
       // ignore - storage may be unavailable
     }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handler = (event: Event) => {
+      const customEvent = event as CustomEvent<{ open?: boolean }>;
+      if (typeof customEvent.detail?.open !== "boolean") {
+        return;
+      }
+
+      setIsOpen(customEvent.detail.open);
+    };
+
+    window.addEventListener(workspaceToggleAllCardsEventName, handler);
+    return () => window.removeEventListener(workspaceToggleAllCardsEventName, handler);
   }, []);
 
   useEffect(() => {

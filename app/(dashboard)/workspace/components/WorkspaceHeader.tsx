@@ -2,12 +2,16 @@ interface WorkspaceHeaderProps {
   patientName: string;
   patientMeta: string;
   onCloseWorkspace: () => void;
+  onExpandAllCards?: () => void;
+  onCollapseAllCards?: () => void;
 }
 
 export function WorkspaceHeader({
   patientName,
   patientMeta,
   onCloseWorkspace,
+  onExpandAllCards,
+  onCollapseAllCards,
 }: WorkspaceHeaderProps) {
   return (
     <div className="workspace-header">
@@ -46,6 +50,20 @@ export function WorkspaceHeader({
         </a>
       </div>
       <div className="spacer"></div>
+      {(onExpandAllCards || onCollapseAllCards) && (
+        <div className="row" style={{ marginBottom: "8px" }}>
+          {onExpandAllCards && (
+            <button className="btn secondary" type="button" onClick={onExpandAllCards}>
+              Expand all
+            </button>
+          )}
+          {onCollapseAllCards && (
+            <button className="btn secondary" type="button" onClick={onCollapseAllCards}>
+              Collapse all
+            </button>
+          )}
+        </div>
+      )}
       <div className="row">
         <button className="btn secondary" type="button" onClick={onCloseWorkspace}>
           Close Workspace

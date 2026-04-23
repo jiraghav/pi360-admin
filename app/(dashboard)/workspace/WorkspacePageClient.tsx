@@ -46,6 +46,13 @@ import {
 const workspaceDemographicsOpenStorageKey = "pi360.ws.card.demographics.open";
 const workspaceAddNoteOpenStorageKey = "pi360.ws.card.add-note.open";
 const workspaceUpdatesOpenStorageKey = "pi360.ws.card.updates.open";
+const workspaceToggleAllCardsEventName = "pi360:workspace:toggleAllCards";
+const workspaceSidebarAppointmentsOpenStorageKey = "pi360.ws.sidebar.appointments.open";
+const workspaceSidebarDiagnosesOpenStorageKey = "pi360.ws.sidebar.diagnoses.open";
+const workspaceSidebarCaseChecklistOpenStorageKey = "pi360.ws.sidebar.caseChecklist.open";
+const workspaceSidebarCustomizeReportOpenStorageKey = "pi360.ws.sidebar.customizeReport.open";
+const workspaceSidebarClaimsOpenStorageKey = "pi360.ws.sidebar.claims.open";
+const workspaceSidebarTreatmentPlanOpenStorageKey = "pi360.ws.sidebar.treatmentPlan.open";
 
 export default function WorkspacePageClient() {
   const router = useRouter();
@@ -112,6 +119,39 @@ export default function WorkspacePageClient() {
   const [isSendingLopRequest, setIsSendingLopRequest] = useState(false);
   const notesListRef = useRef<HTMLDivElement | null>(null);
   const defaultNotesListFiltersRef = useRef(defaultProgressNotesListFilters());
+
+  const setAllWorkspaceCardsOpen = (open: boolean) => {
+    setIsDemographicsOpen(open);
+    setIsAddNoteOpen(open);
+    setIsUpdatesOpen(open);
+
+    if (typeof window !== "undefined") {
+      try {
+        const value = open ? "1" : "0";
+        const keys = [
+          workspaceDemographicsOpenStorageKey,
+          workspaceAddNoteOpenStorageKey,
+          workspaceUpdatesOpenStorageKey,
+          workspaceSidebarAppointmentsOpenStorageKey,
+          workspaceSidebarDiagnosesOpenStorageKey,
+          workspaceSidebarCaseChecklistOpenStorageKey,
+          workspaceSidebarCustomizeReportOpenStorageKey,
+          workspaceSidebarClaimsOpenStorageKey,
+          workspaceSidebarTreatmentPlanOpenStorageKey,
+        ];
+
+        keys.forEach((key) => window.sessionStorage.setItem(key, value));
+      } catch {
+        // ignore - storage may be unavailable
+      }
+
+      window.dispatchEvent(
+        new CustomEvent(workspaceToggleAllCardsEventName, {
+          detail: { open },
+        }),
+      );
+    }
+  };
 
   useEffect(() => {
     if (!isHydrated) {
@@ -716,6 +756,8 @@ export default function WorkspacePageClient() {
         patientName={selectedPatient.name}
         patientMeta={patientMeta}
         onCloseWorkspace={handleCloseWorkspace}
+        onExpandAllCards={() => setAllWorkspaceCardsOpen(true)}
+        onCollapseAllCards={() => setAllWorkspaceCardsOpen(false)}
       />
 
       <div className="workspace-grid">

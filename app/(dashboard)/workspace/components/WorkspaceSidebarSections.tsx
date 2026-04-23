@@ -15,12 +15,15 @@ import {
   savePatientCustomReportData,
   type PatientRealReportData,
 } from "@/lib/custom-report";
+import { getPatientTreatmentPlan, getPatientTreatmentPlanNotes, savePatientTreatmentPlan, type TreatmentPlanNote } from "@/lib/treatment-plan";
 import { WorkspaceAppointmentsCard } from "@/app/(dashboard)/workspace/components/WorkspaceAppointmentsCard";
 import { WorkspaceDiagnosesCard } from "@/app/(dashboard)/workspace/components/WorkspaceDiagnosesCard";
 
 const caseChecklistOpenStorageKey = "pi360.ws.sidebar.caseChecklist.open";
 const customizeReportOpenStorageKey = "pi360.ws.sidebar.customizeReport.open";
 const claimsOpenStorageKey = "pi360.ws.sidebar.claims.open";
+const treatmentPlanOpenStorageKey = "pi360.ws.sidebar.treatmentPlan.open";
+const workspaceToggleAllCardsEventName = "pi360:workspace:toggleAllCards";
 const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 interface WorkspaceSidebarSectionsProps {
@@ -32,12 +35,14 @@ export function WorkspaceSidebarSections({
   selectedPatient,
   treatmentPlanValue,
 }: WorkspaceSidebarSectionsProps) {
-  const [isCaseChecklistOpen, setIsCaseChecklistOpen] = useState(false);
+  const [isCaseChecklistOpen, setIsCaseChecklistOpen] = useState(true);
   const skipPersistCaseChecklistOnceRef = useRef(true);
-  const [isCustomizeReportOpen, setIsCustomizeReportOpen] = useState(false);
+  const [isCustomizeReportOpen, setIsCustomizeReportOpen] = useState(true);
   const skipPersistCustomizeReportOnceRef = useRef(true);
-  const [isClaimsOpen, setIsClaimsOpen] = useState(false);
+  const [isClaimsOpen, setIsClaimsOpen] = useState(true);
   const skipPersistClaimsOnceRef = useRef(true);
+  const [isTreatmentPlanOpen, setIsTreatmentPlanOpen] = useState(true);
+  const skipPersistTreatmentPlanOnceRef = useRef(true);
   const [caseChecklist, setCaseChecklist] = useState<PatientCaseChecklist | null>(null);
   const [caseChecklistReports, setCaseChecklistReports] = useState<PatientReportTrackingRow[]>([]);
   const [caseChecklistLoading, setCaseChecklistLoading] = useState(false);
@@ -48,6 +53,17 @@ export function WorkspaceSidebarSections({
   const [claimsLoading, setClaimsLoading] = useState(false);
   const [claimsDownloading, setClaimsDownloading] = useState(false);
   const [claimsError, setClaimsError] = useState("");
+
+  const [treatmentPlanText, setTreatmentPlanText] = useState("");
+  const [treatmentPlanOriginal, setTreatmentPlanOriginal] = useState("");
+  const [treatmentPlanDirty, setTreatmentPlanDirty] = useState(false);
+  const [treatmentPlanLoading, setTreatmentPlanLoading] = useState(false);
+  const [treatmentPlanSaving, setTreatmentPlanSaving] = useState(false);
+  const [treatmentPlanMessage, setTreatmentPlanMessage] = useState("");
+  const [treatmentPlanError, setTreatmentPlanError] = useState("");
+  const [treatmentPlanNotes, setTreatmentPlanNotes] = useState<TreatmentPlanNote[]>([]);
+  const [treatmentPlanNotesLoading, setTreatmentPlanNotesLoading] = useState(false);
+  const [treatmentPlanNotesError, setTreatmentPlanNotesError] = useState("");
 
   const [customReportLoading, setCustomReportLoading] = useState(false);
   const [customReportSaving, setCustomReportSaving] = useState(false);
@@ -69,12 +85,138 @@ export function WorkspaceSidebarSections({
   const [customProfileUpToDateTime, setCustomProfileUpToDateTime] = useState<string | null>(null);
   const [customLastMarkedReviewed, setCustomLastMarkedReviewed] = useState<string | null>(null);
 
+  const normalizeTreatmentPlanText = (value: string): string => value.replace(/\r\n/g, "\n").trim();
+
+  useEffect(() => {
+    setTreatmentPlanText("");
+    setTreatmentPlanOriginal("");
+    setTreatmentPlanDirty(false);
+    setTreatmentPlanLoading(false);
+    setTreatmentPlanSaving(false);
+    setTreatmentPlanMessage("");
+    setTreatmentPlanError("");
+    setTreatmentPlanNotes([]);
+    setTreatmentPlanNotesLoading(false);
+    setTreatmentPlanNotesError("");
+  }, [selectedPatient.pid]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadTreatmentPlanNotes = async () => {
+      if (!selectedPatient.pid || !isTreatmentPlanOpen) {
+        setTreatmentPlanNotes([]);
+        setTreatmentPlanNotesLoading(false);
+        setTreatmentPlanNotesError("");
+        return;
+      }
+
+      setTreatmentPlanNotesLoading(true);
+      setTreatmentPlanNotesError("");
+
+      try {
+        const notes = await getPatientTreatmentPlanNotes(selectedPatient.pid);
+        if (!isMounted) {
+          return;
+        }
+        setTreatmentPlanNotes(notes);
+      } catch (error) {
+        console.error("Failed to load treatment plan notes:", error);
+        if (!isMounted) {
+          return;
+        }
+        setTreatmentPlanNotes([]);
+        setTreatmentPlanNotesError("Unable to load treatment plan notes right now.");
+      } finally {
+        if (isMounted) {
+          setTreatmentPlanNotesLoading(false);
+        }
+      }
+    };
+
+    void loadTreatmentPlanNotes();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isTreatmentPlanOpen, selectedPatient.pid]);
+
+  useEffect(() => {
+    if (!treatmentPlanMessage) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setTreatmentPlanMessage("");
+    }, 5000);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [treatmentPlanMessage]);
+
+  useEffect(() => {
+    if (!customReportMessage) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setCustomReportMessage("");
+    }, 5000);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [customReportMessage]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadTreatmentPlan = async () => {
+      if (!selectedPatient.pid || !isTreatmentPlanOpen) {
+        setTreatmentPlanLoading(false);
+        return;
+      }
+
+      if (treatmentPlanDirty) {
+        return;
+      }
+
+      setTreatmentPlanLoading(true);
+      setTreatmentPlanError("");
+
+      try {
+        const text = await getPatientTreatmentPlan(selectedPatient.pid);
+        if (!isMounted) {
+          return;
+        }
+        setTreatmentPlanText(text);
+        setTreatmentPlanOriginal(text);
+        setTreatmentPlanDirty(false);
+      } catch (error) {
+        console.error("Failed to load treatment plan:", error);
+        if (!isMounted) {
+          return;
+        }
+        setTreatmentPlanError("Unable to load treatment plan right now.");
+      } finally {
+        if (isMounted) {
+          setTreatmentPlanLoading(false);
+        }
+      }
+    };
+
+    void loadTreatmentPlan();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isTreatmentPlanOpen, selectedPatient.pid, treatmentPlanDirty]);
+
   useClientLayoutEffect(() => {
     try {
       const storedValue = window.sessionStorage.getItem(caseChecklistOpenStorageKey);
-      if (storedValue === "1") {
-        setIsCaseChecklistOpen(true);
-      }
+      setIsCaseChecklistOpen(storedValue !== "0");
     } catch {
       // ignore - storage may be unavailable
     }
@@ -83,9 +225,7 @@ export function WorkspaceSidebarSections({
   useClientLayoutEffect(() => {
     try {
       const storedValue = window.sessionStorage.getItem(customizeReportOpenStorageKey);
-      if (storedValue === "1") {
-        setIsCustomizeReportOpen(true);
-      }
+      setIsCustomizeReportOpen(storedValue !== "0");
     } catch {
       // ignore - storage may be unavailable
     }
@@ -94,12 +234,41 @@ export function WorkspaceSidebarSections({
   useClientLayoutEffect(() => {
     try {
       const storedValue = window.sessionStorage.getItem(claimsOpenStorageKey);
-      if (storedValue === "1") {
-        setIsClaimsOpen(true);
-      }
+      setIsClaimsOpen(storedValue !== "0");
     } catch {
       // ignore - storage may be unavailable
     }
+  }, []);
+
+  useClientLayoutEffect(() => {
+    try {
+      const storedValue = window.sessionStorage.getItem(treatmentPlanOpenStorageKey);
+      setIsTreatmentPlanOpen(storedValue !== "0");
+    } catch {
+      // ignore - storage may be unavailable
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handler = (event: Event) => {
+      const customEvent = event as CustomEvent<{ open?: boolean }>;
+      if (typeof customEvent.detail?.open !== "boolean") {
+        return;
+      }
+
+      const open = customEvent.detail.open;
+      setIsCaseChecklistOpen(open);
+      setIsCustomizeReportOpen(open);
+      setIsClaimsOpen(open);
+      setIsTreatmentPlanOpen(open);
+    };
+
+    window.addEventListener(workspaceToggleAllCardsEventName, handler);
+    return () => window.removeEventListener(workspaceToggleAllCardsEventName, handler);
   }, []);
 
   useEffect(() => {
@@ -140,6 +309,19 @@ export function WorkspaceSidebarSections({
       // ignore - storage may be unavailable
     }
   }, [isClaimsOpen]);
+
+  useEffect(() => {
+    if (skipPersistTreatmentPlanOnceRef.current) {
+      skipPersistTreatmentPlanOnceRef.current = false;
+      return;
+    }
+
+    try {
+      window.sessionStorage.setItem(treatmentPlanOpenStorageKey, isTreatmentPlanOpen ? "1" : "0");
+    } catch {
+      // ignore - storage may be unavailable
+    }
+  }, [isTreatmentPlanOpen]);
 
   useEffect(() => {
     let isMounted = true;
@@ -353,6 +535,45 @@ export function WorkspaceSidebarSections({
     }
   };
 
+  const handleSaveTreatmentPlan = async (action: "save" | "save_share") => {
+    if (!selectedPatient.pid) {
+      return;
+    }
+
+    if (!treatmentPlanDirty) {
+      return;
+    }
+
+    setTreatmentPlanSaving(true);
+    setTreatmentPlanMessage("");
+    setTreatmentPlanError("");
+
+    try {
+      const result = await savePatientTreatmentPlan({
+        pid: selectedPatient.pid,
+        treatmentPlan: treatmentPlanText,
+        action,
+      });
+
+      setTreatmentPlanText(result.treatmentPlan);
+      setTreatmentPlanOriginal(result.treatmentPlan);
+      setTreatmentPlanMessage(result.message || "Treatment plan saved.");
+      setTreatmentPlanDirty(false);
+
+      try {
+        const notes = await getPatientTreatmentPlanNotes(selectedPatient.pid);
+        setTreatmentPlanNotes(notes);
+      } catch (error) {
+        console.error("Failed to refresh treatment plan notes:", error);
+      }
+    } catch (error) {
+      console.error("Failed to save treatment plan:", error);
+      setTreatmentPlanError("Unable to save treatment plan right now.");
+    } finally {
+      setTreatmentPlanSaving(false);
+    }
+  };
+
   const handleSaveCustomReport = async (action: "save" | "save_share") => {
     if (!selectedPatient.pid) {
       return;
@@ -395,6 +616,40 @@ export function WorkspaceSidebarSections({
     } finally {
       setCustomReportSaving(false);
     }
+  };
+
+  const formatDateTimeLabel = (value: string): string => {
+    if (!value) {
+      return "";
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return value;
+    }
+
+    return parsed.toLocaleString(undefined, {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const normalizeTreatmentPlanBody = (value: string): string => {
+    const trimmed = (value ?? "").trim();
+    if (!trimmed) {
+      return "";
+    }
+
+    let cleaned = trimmed;
+    const parts = cleaned.split(/\r?\n\r?\n/);
+    if (parts.length > 1 && /^treatment plan updated/i.test(parts[0])) {
+      cleaned = parts.slice(1).join("\n\n").trim();
+    }
+
+    return cleaned;
   };
 
   const handleRemoveFromUpToDate = async () => {
@@ -900,22 +1155,110 @@ export function WorkspaceSidebarSections({
         </div>
 
         <div className="card">
-          <div className="hd"><div className="title">🧾 Treatment Plan</div><div className="sub">(collapsed)</div><div className="right"><button className="mini primary">Save & Share with Lawyer</button><button className="mini">Save</button></div></div>
-          <div className="bd">
-            <div className="field"><label>Plan</label><textarea id="treatmentPlanText" defaultValue={treatmentPlanValue}></textarea></div>
-            <div className="hr"></div>
-            <div className="actions-row">
-              <button className="mini primary" id="wsAddDoctorRequest">+ Add doctor requests</button>
-              <button className="mini" id="wsAddLawyerTask">+ Add lawyer task</button>
-              <button className="mini" id="wsAddAuthTask">+ Add authorization task</button>
-              <button className="mini" id="wsAddAffiliateTask">+ Add affiliate task</button>
-              <button className="mini" id="wsViewActivities">View Patient Activities</button>
+          <div className="hd">
+            <div className="title">🧾 Treatment Plan</div>
+            <div className="sub">{isTreatmentPlanOpen ? "(expanded)" : "(collapsed)"}</div>
+            <div className="right">
+              <button
+                className="mini primary"
+                type="button"
+                style={isTreatmentPlanOpen ? undefined : { visibility: "hidden" }}
+                aria-hidden={!isTreatmentPlanOpen}
+                tabIndex={isTreatmentPlanOpen ? 0 : -1}
+                disabled={!isTreatmentPlanOpen || treatmentPlanSaving || !treatmentPlanDirty}
+                onClick={() => void handleSaveTreatmentPlan("save_share")}
+              >
+                {treatmentPlanSaving ? "Saving..." : "Save & Share with Lawyer"}
+              </button>
+              <button
+                className="mini"
+                type="button"
+                style={isTreatmentPlanOpen ? undefined : { visibility: "hidden" }}
+                aria-hidden={!isTreatmentPlanOpen}
+                tabIndex={isTreatmentPlanOpen ? 0 : -1}
+                disabled={!isTreatmentPlanOpen || treatmentPlanSaving || !treatmentPlanDirty}
+                onClick={() => void handleSaveTreatmentPlan("save")}
+              >
+                {treatmentPlanSaving ? "Saving..." : "Save"}
+              </button>
+              <button className="mini" type="button" onClick={() => setIsTreatmentPlanOpen((current) => !current)}>
+                {isTreatmentPlanOpen ? "Collapse" : "Expand"}
+              </button>
             </div>
+          </div>
+          <div className="bd" hidden={!isTreatmentPlanOpen}>
+            {treatmentPlanError && (
+              <div className="hint" style={{ color: "var(--bad)" }}>
+                {treatmentPlanError}
+              </div>
+            )}
+            {treatmentPlanMessage && (
+              <div className="hint" style={{ color: "var(--good)" }}>
+                {treatmentPlanMessage}
+              </div>
+            )}
+            <div className="field">
+              <label>Plan</label>
+              <textarea
+                id="treatmentPlanText"
+                value={treatmentPlanText}
+                onChange={(event) => {
+                  const nextValue = event.target.value;
+                  setTreatmentPlanText(nextValue);
+                  setTreatmentPlanDirty(
+                    normalizeTreatmentPlanText(nextValue) !== normalizeTreatmentPlanText(treatmentPlanOriginal),
+                  );
+                }}
+                disabled={treatmentPlanSaving}
+              ></textarea>
+            </div>
+            <div className="hr"></div>
+            <div className="section-hd">
+              <div className="label">Treatment Plans</div>
+              {!treatmentPlanNotesLoading && !treatmentPlanNotesError && treatmentPlanNotes.length > 0 && (
+                <div className="count">{treatmentPlanNotes.length} saved</div>
+              )}
+            </div>
+            {treatmentPlanNotesLoading && <div className="hint">Loading treatment plans...</div>}
+            {!treatmentPlanNotesLoading && treatmentPlanNotesError && (
+              <div className="hint" style={{ color: "var(--bad)" }}>
+                {treatmentPlanNotesError}
+              </div>
+            )}
+            {!treatmentPlanNotesLoading && !treatmentPlanNotesError && treatmentPlanNotes.length === 0 && (
+              <div className="hint">No Treatment Plan Available</div>
+            )}
+            {!treatmentPlanNotesLoading && !treatmentPlanNotesError && treatmentPlanNotes.length > 0 && (
+              <div className="treatment-notes">
+                {treatmentPlanNotes.map((note) => {
+                  const body = normalizeTreatmentPlanBody(note.body);
+                  const noteClassName = note.shared ? "treatment-note shared" : "treatment-note";
+
+                  return (
+                    <div key={note.id} className={noteClassName}>
+                      <div className="treatment-note-header">
+                        <div className="treatment-note-badges">
+                          {note.shared ? (
+                            <span className="chip good">✓ Shared with Lawyer</span>
+                          ) : (
+                            <span className="chip">× Not Shared with Lawyer</span>
+                          )}
+                        </div>
+                        {note.createdAt && (
+                          <div className="treatment-note-time">Created on {formatDateTimeLabel(note.createdAt)}</div>
+                        )}
+                      </div>
+                      <div className="treatment-note-body">{body || "-"}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
         <div className="card">
-          <div className="hd"><div className="title">Billing</div><div className="sub">(collapsed)</div><div className="right"><button className="mini">Case information</button><button className="mini primary">Treatment status request</button></div></div>
+          <div className="hd"><div className="title">Billing</div><div className="sub">(expanded)</div><div className="right"><button className="mini">Case information</button><button className="mini primary">Treatment status request</button></div></div>
           <div className="bd">
             <div className="row wrap">
               <div className="field" style={{ minWidth: "220px" }}>

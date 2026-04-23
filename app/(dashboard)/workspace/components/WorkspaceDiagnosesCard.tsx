@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { SelectedWorkspacePatient } from "@/lib/workspace";
 import {
   deletePatientDiagnosis,
@@ -13,6 +13,8 @@ import {
 } from "@/lib/diagnoses";
 
 const diagnosesOpenStorageKey = "pi360.ws.sidebar.diagnoses.open";
+const workspaceToggleAllCardsEventName = "pi360:workspace:toggleAllCards";
+const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 interface DiagnosisDraft {
   subtypeOptionId: string;
@@ -25,7 +27,7 @@ const emptyDraft: DiagnosisDraft = {
 };
 
 export function WorkspaceDiagnosesCard({ selectedPatient }: { selectedPatient: SelectedWorkspacePatient }) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
   const skipPersistOnceRef = useRef(true);
   const miniToggleStyle = { minWidth: "74px", textAlign: "center" } as const;
 
@@ -76,15 +78,31 @@ export function WorkspaceDiagnosesCard({ selectedPatient }: { selectedPatient: S
     }
   };
 
-  useEffect(() => {
+  useClientLayoutEffect(() => {
     try {
       const storedValue = window.sessionStorage.getItem(diagnosesOpenStorageKey);
-      if (storedValue === "1") {
-        queueMicrotask(() => setIsOpen(true));
-      }
+      setIsOpen(storedValue !== "0");
     } catch {
       // ignore - storage may be unavailable
     }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handler = (event: Event) => {
+      const customEvent = event as CustomEvent<{ open?: boolean }>;
+      if (typeof customEvent.detail?.open !== "boolean") {
+        return;
+      }
+
+      setIsOpen(customEvent.detail.open);
+    };
+
+    window.addEventListener(workspaceToggleAllCardsEventName, handler);
+    return () => window.removeEventListener(workspaceToggleAllCardsEventName, handler);
   }, []);
 
   useEffect(() => {
