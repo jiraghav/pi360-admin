@@ -15,6 +15,7 @@ import {
   savePatientCustomReportData,
   type PatientRealReportData,
 } from "@/lib/custom-report";
+import { getPatientBillingSummary, type BillingGroupMode, type PatientBillingSummary } from "@/lib/billing";
 import { getPatientTreatmentPlan, getPatientTreatmentPlanNotes, savePatientTreatmentPlan, type TreatmentPlanNote } from "@/lib/treatment-plan";
 import { WorkspaceAppointmentsCard } from "@/app/(dashboard)/workspace/components/WorkspaceAppointmentsCard";
 import { WorkspaceDiagnosesCard } from "@/app/(dashboard)/workspace/components/WorkspaceDiagnosesCard";
@@ -23,6 +24,8 @@ const caseChecklistOpenStorageKey = "pi360.ws.sidebar.caseChecklist.open";
 const customizeReportOpenStorageKey = "pi360.ws.sidebar.customizeReport.open";
 const claimsOpenStorageKey = "pi360.ws.sidebar.claims.open";
 const treatmentPlanOpenStorageKey = "pi360.ws.sidebar.treatmentPlan.open";
+const billingOpenStorageKey = "pi360.ws.sidebar.billing.open";
+const billingGroupStorageKey = "pi360.ws.sidebar.billing.group";
 const workspaceToggleAllCardsEventName = "pi360:workspace:toggleAllCards";
 const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
@@ -43,6 +46,13 @@ export function WorkspaceSidebarSections({
   const skipPersistClaimsOnceRef = useRef(true);
   const [isTreatmentPlanOpen, setIsTreatmentPlanOpen] = useState(true);
   const skipPersistTreatmentPlanOnceRef = useRef(true);
+  const [isBillingOpen, setIsBillingOpen] = useState(true);
+  const skipPersistBillingOnceRef = useRef(true);
+  const [billingGroup, setBillingGroup] = useState<BillingGroupMode>("super_facility");
+  const [billingMessage, setBillingMessage] = useState("");
+  const [billingLoading, setBillingLoading] = useState(false);
+  const [billingError, setBillingError] = useState("");
+  const [billingSummary, setBillingSummary] = useState<PatientBillingSummary | null>(null);
   const [caseChecklist, setCaseChecklist] = useState<PatientCaseChecklist | null>(null);
   const [caseChecklistReports, setCaseChecklistReports] = useState<PatientReportTrackingRow[]>([]);
   const [caseChecklistLoading, setCaseChecklistLoading] = useState(false);
@@ -170,6 +180,63 @@ export function WorkspaceSidebarSections({
   }, [customReportMessage]);
 
   useEffect(() => {
+    if (!billingMessage) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setBillingMessage("");
+    }, 5000);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [billingMessage]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadBillingSummary = async () => {
+      if (!selectedPatient.pid || !isBillingOpen) {
+        setBillingSummary(null);
+        setBillingLoading(false);
+        setBillingError("");
+        return;
+      }
+
+      setBillingLoading(true);
+      setBillingError("");
+
+      try {
+        const summary = await getPatientBillingSummary(selectedPatient.pid, billingGroup);
+        if (!isMounted) {
+          return;
+        }
+
+        setBillingSummary(summary);
+        setBillingError(summary.columns.length === 0 ? "No billing data available." : "");
+      } catch (error) {
+        console.error("Failed to load billing summary:", error);
+        if (!isMounted) {
+          return;
+        }
+        setBillingSummary(null);
+        setBillingError(error instanceof Error ? error.message : "Unable to load billing summary right now.");
+      } finally {
+        if (isMounted) {
+          setBillingLoading(false);
+        }
+      }
+    };
+
+    void loadBillingSummary();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [billingGroup, isBillingOpen, selectedPatient.pid]);
+
+  useEffect(() => {
     let isMounted = true;
 
     const loadTreatmentPlan = async () => {
@@ -249,6 +316,43 @@ export function WorkspaceSidebarSections({
     }
   }, []);
 
+  useClientLayoutEffect(() => {
+    try {
+      const storedValue = window.sessionStorage.getItem(billingOpenStorageKey);
+      setIsBillingOpen(storedValue !== "0");
+    } catch {
+      // ignore - storage may be unavailable
+    }
+  }, []);
+
+  useClientLayoutEffect(() => {
+    try {
+      const storedGroup = window.sessionStorage.getItem(billingGroupStorageKey);
+      const normalizedGroup = storedGroup?.trim();
+      if (
+        normalizedGroup === "super_facility" ||
+        normalizedGroup === "patient_status" ||
+        normalizedGroup === "case_type" ||
+        normalizedGroup === "facility"
+      ) {
+        setBillingGroup(normalizedGroup);
+        return;
+      }
+
+      if (normalizedGroup === "Super facility") {
+        setBillingGroup("super_facility");
+      } else if (normalizedGroup === "Patient Status") {
+        setBillingGroup("patient_status");
+      } else if (normalizedGroup === "Case Type") {
+        setBillingGroup("case_type");
+      } else if (normalizedGroup === "Facility") {
+        setBillingGroup("facility");
+      }
+    } catch {
+      // ignore - storage may be unavailable
+    }
+  }, []);
+
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
@@ -265,6 +369,7 @@ export function WorkspaceSidebarSections({
       setIsCustomizeReportOpen(open);
       setIsClaimsOpen(open);
       setIsTreatmentPlanOpen(open);
+      setIsBillingOpen(open);
     };
 
     window.addEventListener(workspaceToggleAllCardsEventName, handler);
@@ -322,6 +427,27 @@ export function WorkspaceSidebarSections({
       // ignore - storage may be unavailable
     }
   }, [isTreatmentPlanOpen]);
+
+  useEffect(() => {
+    if (skipPersistBillingOnceRef.current) {
+      skipPersistBillingOnceRef.current = false;
+      return;
+    }
+
+    try {
+      window.sessionStorage.setItem(billingOpenStorageKey, isBillingOpen ? "1" : "0");
+    } catch {
+      // ignore - storage may be unavailable
+    }
+  }, [isBillingOpen]);
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(billingGroupStorageKey, billingGroup);
+    } catch {
+      // ignore - storage may be unavailable
+    }
+  }, [billingGroup]);
 
   useEffect(() => {
     let isMounted = true;
@@ -650,6 +776,14 @@ export function WorkspaceSidebarSections({
     }
 
     return cleaned;
+  };
+
+  const billingColumns = billingSummary?.columns ?? [];
+  const billingTotals = billingSummary?.totals ?? {
+    cumulativeTotal: 0,
+    totalBalance: 0,
+    patientLimit: 0,
+    availableFunds: 0,
   };
 
   const handleRemoveFromUpToDate = async () => {
@@ -1258,30 +1392,166 @@ export function WorkspaceSidebarSections({
         </div>
 
         <div className="card">
-          <div className="hd"><div className="title">Billing</div><div className="sub">(expanded)</div><div className="right"><button className="mini">Case information</button><button className="mini primary">Treatment status request</button></div></div>
-          <div className="bd">
+          <div className="hd">
+            <div className="title">Billing</div>
+            <div className="sub">{isBillingOpen ? "(expanded)" : "(collapsed)"}</div>
+            <div className="right">
+              <button className="mini" type="button" onClick={() => setIsBillingOpen((current) => !current)}>
+                {isBillingOpen ? "Collapse" : "Expand"}
+              </button>
+            </div>
+          </div>
+          <div className="bd" hidden={!isBillingOpen}>
+            {billingMessage && <div className="hint">{billingMessage}</div>}
+            {billingLoading && <div className="hint">Loading billing...</div>}
+            {!billingLoading && billingError && (
+              <div className="hint" style={{ color: "var(--bad)" }}>
+                {billingError}
+              </div>
+            )}
             <div className="row wrap">
               <div className="field" style={{ minWidth: "220px" }}>
                 <label>Group</label>
-                <select defaultValue="Super facility">
-                  <option>Super facility</option>
-                  <option>Chiropractic / Therapy</option>
-                  <option>Imaging</option>
-                  <option>Pharmacy</option>
+                <select
+                  value={billingGroup}
+                  onChange={(event) => setBillingGroup(event.target.value as BillingGroupMode)}
+                  disabled={billingLoading}
+                >
+                  <option value="super_facility">Super facility</option>
+                  <option value="patient_status">Patient Status</option>
+                  <option value="case_type">Case Type</option>
+                  <option value="facility">Facility</option>
                 </select>
               </div>
-              <div className="spacer"></div>
-              <button className="mini">Request transport authorization</button>
             </div>
             <div className="hr"></div>
-            <div className="bill-grid">
-              <div className="metric"><div className="k">Transportation cost</div><div className="v red">$0.00</div></div>
-              <div className="metric"><div className="k">Patient balance due</div><div className="v red">{formatWorkspaceCurrency(selectedPatient.balance)}</div></div>
-              <div className="metric"><div className="k">Insurance paid</div><div className="v blue">$0.00</div></div>
-              <div className="metric"><div className="k">Cumulative total</div><div className="v">{formatWorkspaceCurrency(selectedPatient.balance)}</div></div>
-            </div>
+            <table border={0} style={{ width: "100%" }}>
+              <tbody>
+                <tr>
+                  <td></td>
+                  {billingColumns.map((col) => (
+                    <td
+                      key={`billing-h-${col.name}`}
+                      style={{ fontWeight: 950, textAlign: "right", wordWrap: "break-word", width: "150px" }}
+                    >
+                      {col.name}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td style={{ fontWeight: 950, color: "var(--bad)" }}>Transportation Cost</td>
+                  {billingColumns.map((col) => (
+                    <td key={`billing-transport-${col.name}`} style={{ textAlign: "right" }}>
+                      {formatWorkspaceCurrency(col.billing.transportationAmount)}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td style={{ fontWeight: 950, color: "var(--bad)" }}>Patient balance due</td>
+                  {billingColumns.map((col) => (
+                    <td key={`billing-balance-${col.name}`} style={{ textAlign: "right" }}>
+                      {formatWorkspaceCurrency(col.billing.patientBalance)}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td style={{ fontWeight: 950 }}>Insurance paid</td>
+                  {billingColumns.map((col) => (
+                    <td key={`billing-ins-${col.name}`} style={{ textAlign: "right" }}>
+                      {formatWorkspaceCurrency(col.billing.insurancePaymentsAmount)}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td style={{ fontWeight: 950 }}>Patient paid</td>
+                  {billingColumns.map((col) => (
+                    <td key={`billing-ptpaid-${col.name}`} style={{ textAlign: "right" }}>
+                      {formatWorkspaceCurrency(col.billing.patientPaymentsAmount)}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td style={{ fontWeight: 950 }}>Adjustments</td>
+                  {billingColumns.map((col) => (
+                    <td key={`billing-adj-${col.name}`} style={{ textAlign: "right" }}>
+                      {formatWorkspaceCurrency(col.billing.patientAdjustmentsAmount)}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td style={{ fontWeight: 950, verticalAlign: "top" }}>Settlement</td>
+                  {billingColumns.map((col) => {
+                    const xCount = Math.min(col.billing.totalSettledCount, 20);
+                    const settledMarks = xCount > 0 ? "x".repeat(xCount) : "";
+
+                    return (
+                      <td key={`billing-settle-${col.name}`} style={{ textAlign: "right", verticalAlign: "top" }}>
+                        {formatWorkspaceCurrency(col.billing.settledAmount)}
+                        <br />
+                        <small style={{ color: "var(--muted)" }}>
+                          (Reduction: {col.billing.reductionPercent}%)
+                          <br />
+                          {settledMarks ? `(${settledMarks})` : ""}
+                        </small>
+                      </td>
+                    );
+                  })}
+                </tr>
+                <tr>
+                  <td style={{ fontWeight: 950 }}>Write Off</td>
+                  {billingColumns.map((col) => (
+                    <td key={`billing-wo-${col.name}`} style={{ textAlign: "right" }}>
+                      {formatWorkspaceCurrency(col.billing.patientWriteOffAmount)}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td style={{ fontWeight: 950, color: "var(--bad)" }}>Cumulative Total</td>
+                  {billingColumns.map((col) => (
+                    <td key={`billing-cum-${col.name}`} style={{ textAlign: "right" }}>
+                      {formatWorkspaceCurrency(col.billing.cumulativeTotal)}
+                    </td>
+                  ))}
+                  <td></td>
+                  <td style={{ fontWeight: 950, textAlign: "right" }}>{formatWorkspaceCurrency(billingTotals.cumulativeTotal)}</td>
+                </tr>
+                <tr>
+                  <td style={{ fontWeight: 950, color: "var(--bad)" }}>Total balance due</td>
+                  {billingColumns.map((col) => (
+                    <td key={`billing-total-${col.name}`} style={{ textAlign: "right" }}>
+                      {formatWorkspaceCurrency(col.billing.totalBalance)}
+                    </td>
+                  ))}
+                  <td style={{ fontWeight: 950, paddingLeft: "7px" }}>Agg. Balance</td>
+                  <td style={{ fontWeight: 950, textAlign: "right" }}>{formatWorkspaceCurrency(billingTotals.totalBalance)}</td>
+                </tr>
+                <tr>
+                  <td></td>
+                  {billingColumns.map((col) => (
+                    <td key={`billing-limit-pad-${col.name}`}></td>
+                  ))}
+                  <td style={{ fontWeight: 950, paddingLeft: "7px" }}>LIMIT</td>
+                  <td style={{ fontWeight: 950, textAlign: "right" }}>{formatWorkspaceCurrency(billingTotals.patientLimit)}</td>
+                </tr>
+                <tr>
+                  <td></td>
+                  {billingColumns.map((col) => (
+                    <td key={`billing-avail-pad-${col.name}`}></td>
+                  ))}
+                  <td style={{ fontWeight: 950, paddingLeft: "7px" }}>Available Funds</td>
+                  <td
+                    style={{
+                      fontWeight: 950,
+                      textAlign: "right",
+                      color: billingTotals.availableFunds > 0 ? "var(--bad)" : undefined,
+                    }}
+                  >
+                    {formatWorkspaceCurrency(billingTotals.availableFunds)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
             <div className="hr"></div>
-            <div className="hint">This card is designed to match the current EMR components but presented as readable KPIs.</div>
           </div>
         </div>
       </div>

@@ -71,9 +71,6 @@ export function WorkspaceHeader({
         <button className="btn secondary" id="wsCopyDetails">
           Copy Details
         </button>
-        <button className="btn" id="wsSaveAll">
-          Save
-        </button>
       </div>
     </div>
   );

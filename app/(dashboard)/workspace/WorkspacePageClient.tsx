@@ -53,6 +53,7 @@ const workspaceSidebarCaseChecklistOpenStorageKey = "pi360.ws.sidebar.caseCheckl
 const workspaceSidebarCustomizeReportOpenStorageKey = "pi360.ws.sidebar.customizeReport.open";
 const workspaceSidebarClaimsOpenStorageKey = "pi360.ws.sidebar.claims.open";
 const workspaceSidebarTreatmentPlanOpenStorageKey = "pi360.ws.sidebar.treatmentPlan.open";
+const workspaceSidebarBillingOpenStorageKey = "pi360.ws.sidebar.billing.open";
 
 export default function WorkspacePageClient() {
   const router = useRouter();
@@ -138,6 +139,7 @@ export default function WorkspacePageClient() {
           workspaceSidebarCustomizeReportOpenStorageKey,
           workspaceSidebarClaimsOpenStorageKey,
           workspaceSidebarTreatmentPlanOpenStorageKey,
+          workspaceSidebarBillingOpenStorageKey,
         ];
 
         keys.forEach((key) => window.sessionStorage.setItem(key, value));
