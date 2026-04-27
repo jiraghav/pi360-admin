@@ -33,6 +33,13 @@ export default function Sidebar({ onLogout }: SidebarProps) {
     }
   };
 
+  const focusPatientSearch = () => {
+    closeMobileSidebar();
+    window.setTimeout(() => {
+      window.dispatchEvent(new Event("pi360:focus-patient-search"));
+    }, 100);
+  };
+
   return (
     <aside className="sidebar">
       <button
@@ -55,7 +62,7 @@ export default function Sidebar({ onLogout }: SidebarProps) {
         <button className="pillbtn" onClick={closeMobileSidebar}>
           📝 <span>New Note</span>
         </button>
-        <button className="pillbtn" onClick={closeMobileSidebar}>
+        <button className="pillbtn" onClick={focusPatientSearch}>
           🔎 <span>Search</span>
         </button>
         {onLogout && (

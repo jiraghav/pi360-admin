@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useSelectedPatient } from "../SelectedPatientProvider";
 import { getEmrNotifications, getLawyerTasks } from "@/lib/lawyer-notifications";
 import { subscribeToNotificationRefresh } from "@/app/components/PusherNotifications";
+import { getPatientsPage, type PatientListItem } from "@/lib/patients";
+import { createWorkspacePatientFromListItem, formatWorkspaceDate } from "@/lib/workspace";
 
 const pageConfig: Record<string, { title: string; subtitle: string }> = {
   "/": {
@@ -84,7 +86,7 @@ export default function Topbar() {
   const pathname = usePathname();
   const router = useRouter();
   const config = pageConfig[pathname] || pageConfig["/"];
-  const { selectedPatient, clearSelectedPatient } = useSelectedPatient();
+  const { selectedPatient, selectPatient, clearSelectedPatient } = useSelectedPatient();
   const [lawyerNotificationsCount, setLawyerNotificationsCount] = useState(0);
   const [affiliateNotificationsCount, setAffiliateNotificationsCount] = useState(0);
   const [emrNotificationsCount, setEmrNotificationsCount] = useState(0);
@@ -94,6 +96,11 @@ export default function Topbar() {
   const [locationRequestsCount, setLocationRequestsCount] = useState(0);
   const [recordRequestsCount, setRecordRequestsCount] = useState(0);
   const [reductionSubmissionsCount, setReductionSubmissionsCount] = useState(0);
+  const [patientSearch, setPatientSearch] = useState("");
+  const [patientSearchResults, setPatientSearchResults] = useState<PatientListItem[]>([]);
+  const [patientSearchLoading, setPatientSearchLoading] = useState(false);
+  const [patientSearchOpen, setPatientSearchOpen] = useState(false);
+  const patientSearchInputRef = useRef<HTMLInputElement | null>(null);
 
   const openLawyerNotifications = useMemo(
     () => lawyerNotificationsCount,
@@ -170,9 +177,93 @@ export default function Topbar() {
     };
   }, [fetchNotificationCounts]);
 
+  useEffect(() => {
+    const search = patientSearch.trim();
+
+    if (search.length < 2) {
+      setPatientSearchResults([]);
+      setPatientSearchLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    setPatientSearchLoading(true);
+
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const data = await getPatientsPage({
+          page: 1,
+          pageSize: 6,
+          search,
+        });
+
+        if (!isMounted) {
+          return;
+        }
+
+        setPatientSearchResults(data.patients);
+        setPatientSearchOpen(true);
+      } catch (error) {
+        console.error("Failed to search patients:", error);
+
+        if (isMounted) {
+          setPatientSearchResults([]);
+        }
+      } finally {
+        if (isMounted) {
+          setPatientSearchLoading(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      isMounted = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [patientSearch]);
+
+  useEffect(() => {
+    const handleFocusPatientSearch = () => {
+      setPatientSearchOpen(true);
+      patientSearchInputRef.current?.scrollIntoView({
+        block: "center",
+        inline: "nearest",
+      });
+      patientSearchInputRef.current?.focus();
+    };
+
+    window.addEventListener("pi360:focus-patient-search", handleFocusPatientSearch);
+
+    return () => {
+      window.removeEventListener("pi360:focus-patient-search", handleFocusPatientSearch);
+    };
+  }, []);
+
   const handleCloseWorkspace = () => {
     clearSelectedPatient();
     router.push("/patients");
+  };
+
+  const handleSelectPatientSearchResult = (patient: PatientListItem) => {
+    selectPatient(createWorkspacePatientFromListItem(patient));
+    setPatientSearch("");
+    setPatientSearchResults([]);
+    setPatientSearchOpen(false);
+    router.push("/workspace");
+  };
+
+  const handlePatientSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (patientSearchResults.length > 0) {
+      handleSelectPatientSearchResult(patientSearchResults[0]);
+      return;
+    }
+
+    const search = patientSearch.trim();
+    if (search) {
+      router.push(`/patients?search=${encodeURIComponent(search)}`);
+    }
   };
 
   return (
@@ -183,9 +274,49 @@ export default function Topbar() {
           <div className="s">{config.subtitle}</div>
         </div>
 
-        <div className="searchbar">
-          {"\u{1F50E}"} <input placeholder="Search patient, facility, claim, template..." />
-        </div>
+        <form className="searchbar nav-patient-search" onSubmit={handlePatientSearchSubmit}>
+          <span aria-hidden="true">{"\u{1F50E}"}</span>
+          <input
+            ref={patientSearchInputRef}
+            aria-label="Search patients"
+            autoComplete="off"
+            onBlur={() => {
+              window.setTimeout(() => setPatientSearchOpen(false), 150);
+            }}
+            onChange={(event) => {
+              setPatientSearch(event.target.value);
+              setPatientSearchOpen(true);
+            }}
+            onFocus={() => setPatientSearchOpen(true)}
+            placeholder="Search patients..."
+            value={patientSearch}
+          />
+          {patientSearchOpen && patientSearch.trim().length >= 2 && (
+            <div className="nav-search-results">
+              {patientSearchLoading && (
+                <div className="nav-search-empty">Searching patients...</div>
+              )}
+              {!patientSearchLoading && patientSearchResults.length === 0 && (
+                <div className="nav-search-empty">No patients found.</div>
+              )}
+              {!patientSearchLoading && patientSearchResults.map((patient) => (
+                <button
+                  className="nav-search-result"
+                  key={`${patient.pid ?? patient.uuid ?? patient.name}-${patient.dob ?? "no-dob"}`}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => handleSelectPatientSearchResult(patient)}
+                  type="button"
+                >
+                  <span className="nav-search-result-name">{patient.name || "Unnamed patient"}</span>
+                  <span className="nav-search-result-meta">
+                    DOB {formatWorkspaceDate(patient.dob)} · DOI {formatWorkspaceDate(patient.doi)}
+                    {patient.facility ? ` · ${patient.facility}` : ""}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </form>
 
         <div className="top-actions">
           <Link
