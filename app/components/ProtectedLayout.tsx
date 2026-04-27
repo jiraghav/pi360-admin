@@ -8,6 +8,7 @@ import Sidebar from "./layout/Sidebar";
 import Topbar from "./layout/Topbar";
 import EmrTopnav from "./layout/EmrTopnav";
 import MobileMenuToggle from "./layout/MobileMenuToggle";
+import PusherNotifications from "./PusherNotifications";
 
 interface ProtectedLayoutProps {
   children: React.ReactNode;
@@ -76,6 +77,7 @@ export default function ProtectedLayout({ children }: ProtectedLayoutProps) {
         <main className="main">
           <EmrTopnav onLogout={handleLogout} />
           <Topbar />
+          <PusherNotifications />
 
           <div className="content">{children}</div>
         </main>

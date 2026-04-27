@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSelectedPatient } from "../SelectedPatientProvider";
+import { getEmrNotifications, getLawyerTasks } from "@/lib/lawyer-notifications";
+import { subscribeToNotificationRefresh } from "@/app/components/PusherNotifications";
 
 const pageConfig: Record<string, { title: string; subtitle: string }> = {
   "/": {
@@ -39,6 +42,42 @@ const pageConfig: Record<string, { title: string; subtitle: string }> = {
     title: "Patient Workspace",
     subtitle: "EMR view with the same components, reorganized to be simple",
   },
+  "/lawyer-notifications": {
+    title: "Lawyer Notifications",
+    subtitle: "OpenEMR-style notification worklist with filters and patient actions",
+  },
+  "/affiliate-notifications": {
+    title: "Affiliate Notifications",
+    subtitle: "OpenEMR-style affiliate notification worklist with filters and actions",
+  },
+  "/emr-notifications": {
+    title: "EMR Notifications",
+    subtitle: "Unread OpenEMR notifications with patient and task context",
+  },
+  "/doctor-requests": {
+    title: "Doctor Requests",
+    subtitle: "OpenEMR-style doctor request worklist with filters and actions",
+  },
+  "/authorization-tasks": {
+    title: "Authorization Tasks",
+    subtitle: "OpenEMR authorization task worklist with filters and actions",
+  },
+  "/new-referrals": {
+    title: "New Referrals",
+    subtitle: "OpenEMR referral worklist with filters and actions",
+  },
+  "/location-requests": {
+    title: "Location Requests",
+    subtitle: "OpenEMR location request worklist with filters and actions",
+  },
+  "/record-requests": {
+    title: "Record Requests",
+    subtitle: "OpenEMR record request worklist with filters and actions",
+  },
+  "/reduction-submissions": {
+    title: "Reduction Submissions",
+    subtitle: "OpenEMR reduction submission worklist with filters and actions",
+  },
 };
 
 export default function Topbar() {
@@ -46,6 +85,90 @@ export default function Topbar() {
   const router = useRouter();
   const config = pageConfig[pathname] || pageConfig["/"];
   const { selectedPatient, clearSelectedPatient } = useSelectedPatient();
+  const [lawyerNotificationsCount, setLawyerNotificationsCount] = useState(0);
+  const [affiliateNotificationsCount, setAffiliateNotificationsCount] = useState(0);
+  const [emrNotificationsCount, setEmrNotificationsCount] = useState(0);
+  const [doctorRequestsCount, setDoctorRequestsCount] = useState(0);
+  const [authorizationTasksCount, setAuthorizationTasksCount] = useState(0);
+  const [newReferralsCount, setNewReferralsCount] = useState(0);
+  const [locationRequestsCount, setLocationRequestsCount] = useState(0);
+  const [recordRequestsCount, setRecordRequestsCount] = useState(0);
+  const [reductionSubmissionsCount, setReductionSubmissionsCount] = useState(0);
+
+  const openLawyerNotifications = useMemo(
+    () => lawyerNotificationsCount,
+    [lawyerNotificationsCount],
+  );
+  const openAffiliateNotifications = useMemo(
+    () => affiliateNotificationsCount,
+    [affiliateNotificationsCount],
+  );
+  const openEmrNotifications = useMemo(() => emrNotificationsCount, [emrNotificationsCount]);
+  const openDoctorRequests = useMemo(() => doctorRequestsCount, [doctorRequestsCount]);
+  const openAuthorizationTasks = useMemo(() => authorizationTasksCount, [authorizationTasksCount]);
+  const openNewReferrals = useMemo(() => newReferralsCount, [newReferralsCount]);
+  const openLocationRequests = useMemo(() => locationRequestsCount, [locationRequestsCount]);
+  const openRecordRequests = useMemo(() => recordRequestsCount, [recordRequestsCount]);
+  const openReductionSubmissions = useMemo(() => reductionSubmissionsCount, [reductionSubmissionsCount]);
+
+  const fetchNotificationCounts = useCallback(async () => {
+    try {
+      const [
+        lawyerNotifications,
+        affiliateNotifications,
+        emrNotifications,
+        doctorRequests,
+        authorizationTasks,
+        newReferrals,
+        locationRequests,
+        recordRequests,
+        reductionSubmissions,
+      ] = await Promise.all([
+        getLawyerTasks({ page: 1, pageSize: 1, type: 1, status: "99" }),
+        getLawyerTasks({ page: 1, pageSize: 1, type: 4, status: "99" }),
+        getEmrNotifications({ page: 1, pageSize: 1, readStatus: "0" }),
+        getLawyerTasks({ page: 1, pageSize: 1, type: 3, status: "99" }),
+        getLawyerTasks({ page: 1, pageSize: 1, type: 2, authorization: 1, status: "99" }),
+        getLawyerTasks({ page: 1, pageSize: 1, type: 1, title: "New Referral", status: "99" }),
+        getLawyerTasks({ page: 1, pageSize: 1, type: 1, title: "New Location Request%", status: "99" }),
+        getLawyerTasks({ page: 1, pageSize: 1, type: 1, title: "%Record Request from Back Office%", status: "99" }),
+        getLawyerTasks({ page: 1, pageSize: 1, type: 1, title: "%Lawyer submitted reduction%", status: "99" }),
+      ]);
+
+      setLawyerNotificationsCount(lawyerNotifications.totalItems);
+      setAffiliateNotificationsCount(affiliateNotifications.totalItems);
+      setEmrNotificationsCount(emrNotifications.totalItems);
+      setDoctorRequestsCount(doctorRequests.totalItems);
+      setAuthorizationTasksCount(authorizationTasks.totalItems);
+      setNewReferralsCount(newReferrals.totalItems);
+      setLocationRequestsCount(locationRequests.totalItems);
+      setRecordRequestsCount(recordRequests.totalItems);
+      setReductionSubmissionsCount(reductionSubmissions.totalItems);
+    } catch (error) {
+      console.error("Failed to load notification counts:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    const refreshCounts = () => {
+      void fetchNotificationCounts();
+    };
+
+    const initialLoadId = window.setTimeout(() => {
+      refreshCounts();
+    }, 0);
+
+    const intervalId = window.setInterval(() => {
+      refreshCounts();
+    }, 60000);
+    const unsubscribe = subscribeToNotificationRefresh(refreshCounts);
+
+    return () => {
+      window.clearTimeout(initialLoadId);
+      window.clearInterval(intervalId);
+      unsubscribe();
+    };
+  }, [fetchNotificationCounts]);
 
   const handleCloseWorkspace = () => {
     clearSelectedPatient();
@@ -77,25 +200,43 @@ export default function Topbar() {
           <button className="btn">
             {"\u2795"} <span>New Task</span>
           </button>
-          <button className="iconbtn">{"\u{1F514}"}</button>
+          <Link
+            className="iconbtn"
+            href="/lawyer-notifications"
+            title={`${openLawyerNotifications} open lawyer notifications`}
+          >
+            {"\u{1F514}"}
+          </Link>
         </div>
       </div>
       <div className="notif-strip">
-        <div className="pill">
-          Lawyer Notifications <strong id="lawyerNotif">(0)</strong>
-        </div>
-        <div className="pill">
-          Affiliate Notifications <strong id="affNotif">(0)</strong>
-        </div>
-        <div className="pill">
-          EMR Notifications <strong id="emrNotif">(0)</strong>
-        </div>
-        <div className="pill">
-          Doctor Requests <strong id="docReq">(0)</strong>
-        </div>
-        <div className="pill">
-          Authorization Tasks <strong id="authTasks">(0)</strong>
-        </div>
+        <Link className="pill notification-pill" href="/lawyer-notifications">
+          Lawyer Notifications <strong id="lawyerNotif">({openLawyerNotifications})</strong>
+        </Link>
+        <Link className="pill notification-pill" href="/affiliate-notifications">
+          Affiliate Notifications <strong id="affNotif">({openAffiliateNotifications})</strong>
+        </Link>
+        <Link className="pill notification-pill" href="/emr-notifications">
+          EMR Notifications <strong id="emrNotif">({openEmrNotifications})</strong>
+        </Link>
+        <Link className="pill notification-pill" href="/doctor-requests">
+          Doctor Requests <strong id="docReq">({openDoctorRequests})</strong>
+        </Link>
+        <Link className="pill notification-pill" href="/authorization-tasks">
+          Authorization Tasks <strong id="authTasks">({openAuthorizationTasks})</strong>
+        </Link>
+        <Link className="pill notification-pill" href="/new-referrals">
+          New Referrals <strong>({openNewReferrals})</strong>
+        </Link>
+        <Link className="pill notification-pill" href="/location-requests">
+          Location Requests <strong>({openLocationRequests})</strong>
+        </Link>
+        <Link className="pill notification-pill" href="/record-requests">
+          Record Requests <strong>({openRecordRequests})</strong>
+        </Link>
+        <Link className="pill notification-pill" href="/reduction-submissions">
+          Reduction Submissions <strong>({openReductionSubmissions})</strong>
+        </Link>
         <div className="spacer"></div>
         <div className="pill" title="Selected patient">
           Patient:{" "}

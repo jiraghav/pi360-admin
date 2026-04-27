@@ -515,7 +515,7 @@
     padding: 10px 14px;
     border-bottom: 1px solid var(--border);
     background: rgba(255, 255, 255, .55);
-    overflow-x: auto;
+    overflow-x: visible;
     flex-wrap: nowrap;
     -webkit-overflow-scrolling: touch;
   }
@@ -549,6 +549,142 @@
 
   .pill strong {
     color: var(--text)
+  }
+
+  .notification-pill-wrap {
+    position: relative;
+    flex: 0 0 auto;
+  }
+
+  .notification-pill {
+    cursor: pointer;
+    text-decoration: none;
+  }
+
+  .notification-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    z-index: 40;
+    width: min(520px, calc(100vw - 32px));
+    max-height: 520px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: rgba(255, 255, 255, .98);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    box-shadow: 0 22px 60px rgba(15, 23, 42, .18);
+  }
+
+  .notification-panel-head {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(255, 255, 255, .96), rgba(255, 255, 255, .86));
+  }
+
+  .notification-panel-title {
+    font-weight: 1000;
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  .notification-empty {
+    padding: 12px;
+    color: var(--muted2);
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .notification-list {
+    overflow: auto;
+    display: grid;
+  }
+
+  .notification-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    padding: 12px;
+    border-bottom: 1px solid rgba(31, 36, 48, .07);
+    background: rgba(255, 255, 255, .82);
+    border-left: 0;
+    border-right: 0;
+    border-top: 0;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+  }
+
+  .notification-item.unread {
+    background: rgba(47, 111, 236, .06);
+    box-shadow: inset 3px 0 0 rgba(47, 111, 236, .55);
+  }
+
+  .notification-item:disabled {
+    cursor: default;
+  }
+
+  .notification-item:hover:not(:disabled) {
+    background: rgba(47, 111, 236, .08);
+  }
+
+  .notification-item-main {
+    min-width: 0;
+  }
+
+  .notification-item-title {
+    font-size: 13px;
+    font-weight: 1000;
+    color: var(--text);
+  }
+
+  .notification-item-message,
+  .notification-item-meta,
+  .notification-time {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.35;
+  }
+
+  .notification-item-message {
+    margin-top: 4px;
+    overflow-wrap: anywhere;
+  }
+
+  .notification-item-meta {
+    margin-top: 6px;
+    color: var(--muted2);
+  }
+
+  .notification-item-side {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-end;
+  }
+
+  .notification-time {
+    white-space: nowrap;
+  }
+
+  .link-button {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: var(--brand2);
+    cursor: pointer;
+    font-weight: 900;
+    text-align: left;
+  }
+
+  .link-button:hover {
+    text-decoration: underline;
   }
 
   .content {
@@ -1372,6 +1508,421 @@
     white-space: nowrap;
   }
 
+  /* Lawyer notifications page */
+  .lawyer-notifications-page {
+    display: grid;
+    gap: 14px;
+  }
+
+  .lawyer-notifications-head {
+    align-items: flex-start;
+  }
+
+  .lawyer-notifications-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .lawyer-notifications-filterbar {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(150px, .6fr);
+    gap: 12px;
+    align-items: end;
+    margin-bottom: 12px;
+  }
+
+  .lawyer-notifications-error {
+    margin-bottom: 12px;
+    color: var(--bad);
+  }
+
+  .lawyer-notifications-table-wrap {
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, .78);
+  }
+
+  .lawyer-notifications-table {
+    min-width: 1100px;
+  }
+
+  .lawyer-notifications-table td {
+    font-weight: 750;
+  }
+
+  .lawyer-notification-unread-row td {
+    background: rgba(240, 165, 0, .07);
+  }
+
+  .lawyer-notifications-title {
+    font-weight: 950;
+  }
+
+  .lawyer-notifications-description {
+    white-space: pre-line;
+    min-width: 260px;
+  }
+
+  .lawyer-notifications-row-actions {
+    margin-top: 0;
+    min-width: 210px;
+  }
+
+  .lawyer-emr-page {
+    min-height: 100%;
+    color: var(--text);
+  }
+
+  .lawyer-emr-card {
+    background: rgba(255, 255, 255, .86);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 1px 0 rgba(17, 24, 39, .02);
+    overflow: hidden;
+    min-height: 640px;
+  }
+
+  .lawyer-emr-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(255, 255, 255, .95), rgba(255, 255, 255, .78));
+    flex-wrap: wrap;
+  }
+
+  .lawyer-emr-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 950;
+    color: var(--text);
+    flex-wrap: wrap;
+  }
+
+  .lawyer-emr-enable {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: fit-content;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .lawyer-emr-filters {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(140px, .65fr) minmax(150px, .7fr) auto;
+    gap: 12px;
+    align-items: end;
+    padding: 12px;
+    border-bottom: 1px solid rgba(31, 36, 48, .07);
+    background: rgba(255, 255, 255, .58);
+  }
+
+  .lawyer-emr-filters label,
+  .lawyer-emr-table-controls label {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .lawyer-emr-filters input,
+  .lawyer-emr-filters select,
+  .lawyer-emr-table-controls select {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 9px 10px;
+    outline: none;
+    background: rgba(255, 255, 255, .9);
+    color: var(--text);
+    min-width: 0;
+  }
+
+  .lawyer-emr-filters input:focus,
+  .lawyer-emr-filters select:focus,
+  .lawyer-emr-table-controls select:focus {
+    box-shadow: var(--focus);
+    border-color: rgba(47, 111, 236, .30);
+  }
+
+  .lawyer-emr-message {
+    margin: 12px;
+    padding: 10px 12px;
+    border: 1px solid rgba(31, 157, 85, .22);
+    border-radius: 14px;
+    background: rgba(31, 157, 85, .08);
+    color: var(--good);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .lawyer-emr-message.error {
+    border-color: rgba(229, 72, 77, .24);
+    background: rgba(229, 72, 77, .08);
+    color: var(--bad);
+  }
+
+  .lawyer-emr-table-controls {
+    padding: 12px 12px 8px;
+    font-size: 12px;
+  }
+
+  .lawyer-emr-table-controls label {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .lawyer-emr-table-wrap {
+    overflow: auto;
+    margin: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, .78);
+  }
+
+  .lawyer-emr-table {
+    width: 100%;
+    min-width: 1180px;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .lawyer-emr-table th {
+    background: rgba(255, 255, 255, .72);
+    color: var(--muted);
+    text-align: left;
+    font-weight: 950;
+    font-size: 12px;
+    padding: 10px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
+  .lawyer-emr-table td {
+    padding: 10px;
+    border-bottom: 1px solid rgba(31, 36, 48, .07);
+    vertical-align: top;
+    color: var(--text);
+    font-weight: 750;
+  }
+
+  .lawyer-emr-table tr:hover td {
+    background: rgba(47, 111, 236, .04);
+  }
+
+  .lawyer-emr-description {
+    white-space: pre-wrap;
+    min-width: 260px;
+    max-width: 460px;
+    word-break: break-word;
+  }
+
+  .lawyer-emr-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    min-width: 390px;
+  }
+
+  .emr-btn {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 8px 10px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 900;
+    line-height: 1.2;
+    white-space: nowrap;
+    background: rgba(255, 255, 255, .88);
+    color: var(--muted);
+  }
+
+  .emr-btn:disabled,
+  .emr-page-btn:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+  }
+
+  .emr-btn.default {
+    background: rgba(31, 36, 48, .06);
+    color: var(--text);
+  }
+
+  .emr-btn.primary {
+    background: rgba(47, 111, 236, .10);
+    border-color: rgba(47, 111, 236, .22);
+    color: var(--brand2);
+  }
+
+  .emr-btn.info {
+    background: rgba(14, 165, 233, .10);
+    border-color: rgba(14, 165, 233, .25);
+    color: var(--info);
+  }
+
+  .emr-btn.warning {
+    background: rgba(240, 165, 0, .12);
+    border-color: rgba(240, 165, 0, .26);
+    color: #a16207;
+  }
+
+  .emr-btn.success {
+    background: rgba(31, 157, 85, .10);
+    border-color: rgba(31, 157, 85, .22);
+    color: var(--good);
+  }
+
+  .emr-btn.danger {
+    background: rgba(229, 72, 77, .10);
+    border-color: rgba(229, 72, 77, .24);
+    color: var(--bad);
+  }
+
+  .lawyer-emr-notes {
+    padding: 10px;
+    background: rgba(255, 255, 255, .72);
+  }
+
+  .lawyer-emr-notes-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  .lawyer-emr-notes-table th,
+  .lawyer-emr-notes-table td {
+    border: 1px solid var(--border);
+    padding: 8px;
+    text-align: left;
+  }
+
+  .lawyer-emr-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+    padding: 12px;
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 800;
+    flex-wrap: wrap;
+  }
+
+  .lawyer-emr-pagination {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .emr-page-btn {
+    min-width: 28px;
+    min-height: 28px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, .88);
+    color: var(--text);
+    cursor: pointer;
+    border-radius: 10px;
+    font-weight: 900;
+  }
+
+  .emr-page-btn.active {
+    background: rgba(47, 111, 236, .10);
+    border-color: rgba(47, 111, 236, .22);
+    color: var(--brand2);
+  }
+
+  .lawyer-emr-reply-modal {
+    width: min(560px, 100%);
+  }
+
+  .lawyer-emr-task-form-modal {
+    width: min(760px, 100%);
+  }
+
+  .lawyer-task-form-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .lawyer-task-form-table td {
+    padding: 6px;
+    vertical-align: top;
+  }
+
+  .lawyer-task-form-heading {
+    margin: 0 0 8px;
+    font-size: 16px;
+    font-weight: 950;
+  }
+
+  .lawyer-task-patient-summary {
+    float: right;
+    text-align: right;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.45;
+  }
+
+  .lawyer-task-form-label {
+    width: 110px;
+    color: var(--muted);
+    font-weight: 900;
+    font-size: 13px;
+  }
+
+  .lawyer-task-form-control,
+  .lawyer-task-form-select {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 9px 10px;
+    outline: none;
+    background: rgba(255, 255, 255, .9);
+  }
+
+  .lawyer-task-form-control:disabled,
+  .lawyer-task-form-select:disabled,
+  .lawyer-task-form-control-file:disabled {
+    opacity: .7;
+    cursor: not-allowed;
+  }
+
+  .lawyer-task-form-textarea {
+    min-height: 100px;
+    resize: vertical;
+  }
+
+  .lawyer-task-form-control-file {
+    width: 100%;
+  }
+
+  .lawyer-task-notes-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .lawyer-task-notes-head h4 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 950;
+  }
+
   /* Responsive */
   @media (max-width: 1100px) {
     .app {
@@ -2050,7 +2601,8 @@
     line-height: 1.35
   }
 
-  .toast .x {
+  .toast .x,
+  .toast-x {
     float: right;
     cursor: pointer;
     width: 28px;
