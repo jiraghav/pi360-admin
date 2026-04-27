@@ -1,14 +1,17 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useSelectedPatient } from "@/app/components/SelectedPatientProvider";
 import { getFacilities, type FacilityOption } from "@/lib/facilities";
 import {
+  createPatient,
   getPatientsPage,
+  getPatientStatusOptions,
   savePatientDemographics,
   savePatientVisitsBilling,
   type PatientListItem,
+  type PatientStatusOption,
   type PatientsPagination,
 } from "@/lib/patients";
 import {
@@ -61,6 +64,18 @@ interface PatientVisitsBillingDraft {
   nextVisit: string;
   balance: string;
   paymentStatus: string;
+}
+
+interface AddPatientDraft {
+  firstName: string;
+  lastName: string;
+  dob: string;
+  doi: string;
+  phone: string;
+  email: string;
+  facilityId: number | null;
+  status: string;
+  statusLabel: string;
 }
 
 function formatDate(value: string | null) {
@@ -187,6 +202,18 @@ const patientsSearchStorageKey = "pi360.patients.search";
 const workspaceAddNoteOpenStorageKey = "pi360.ws.card.add-note.open";
 const workspaceUpdatesOpenStorageKey = "pi360.ws.card.updates.open";
 
+const emptyAddPatientDraft: AddPatientDraft = {
+  firstName: "",
+  lastName: "",
+  dob: "",
+  doi: "",
+  phone: "",
+  email: "",
+  facilityId: null,
+  status: "Active Auto",
+  statusLabel: "Active Auto",
+};
+
 export default function PatientsPageClient() {
   const router = useRouter();
   const { selectPatient } = useSelectedPatient();
@@ -213,6 +240,16 @@ export default function PatientsPageClient() {
   const [recipientOptionsLoadingByPatient, setRecipientOptionsLoadingByPatient] = useState<Record<string, boolean>>({});
   const [recipientOptionsErrorByPatient, setRecipientOptionsErrorByPatient] = useState<Record<string, string>>({});
   const [recipientModal, setRecipientModal] = useState<{ patientKey: string; state: ProgressNoteRecipientModalState } | null>(null);
+  const [addPatientOpen, setAddPatientOpen] = useState(false);
+  const [addPatientDraft, setAddPatientDraft] = useState<AddPatientDraft>(emptyAddPatientDraft);
+  const [addPatientStatusOptions, setAddPatientStatusOptions] = useState<PatientStatusOption[]>([]);
+  const [addPatientStatusSearch, setAddPatientStatusSearch] = useState(emptyAddPatientDraft.statusLabel);
+  const [addPatientStatusOpen, setAddPatientStatusOpen] = useState(false);
+  const [addPatientStatusLoading, setAddPatientStatusLoading] = useState(false);
+  const [addPatientFacilitySearch, setAddPatientFacilitySearch] = useState("");
+  const [addPatientFacilityOpen, setAddPatientFacilityOpen] = useState(false);
+  const [addPatientSaving, setAddPatientSaving] = useState(false);
+  const [addPatientError, setAddPatientError] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -221,6 +258,34 @@ export default function PatientsPageClient() {
     expandedPatientId == null
       ? null
       : patients.find((patient) => getPatientKey(patient) === expandedPatientId) ?? null;
+
+  const filteredAddPatientStatusOptions = useMemo(() => {
+    const search = addPatientStatusSearch.trim().toLowerCase();
+
+    if (!search) {
+      return addPatientStatusOptions;
+    }
+
+    return addPatientStatusOptions.filter((status) =>
+      status.title.toLowerCase().includes(search) || status.id.toLowerCase().includes(search),
+    );
+  }, [addPatientStatusOptions, addPatientStatusSearch]);
+  const filteredAddPatientFacilities = useMemo(() => {
+    const search = addPatientFacilitySearch.trim().toLowerCase();
+
+    if (!search) {
+      return facilities.slice(0, 100);
+    }
+
+    return facilities.filter((facility) => {
+      const haystack = [facility.name, facility.city, facility.state]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(search);
+    }).slice(0, 100);
+  }, [addPatientFacilitySearch, facilities]);
 
   useEffect(() => {
     if (!expandedPatient?.pid) {
@@ -338,6 +403,44 @@ export default function PatientsPageClient() {
       });
     });
   }, [searchQuery]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchPatientStatuses = async () => {
+      setAddPatientStatusLoading(true);
+
+      try {
+        const statuses = await getPatientStatusOptions();
+        if (!isMounted) {
+          return;
+        }
+
+        setAddPatientStatusOptions(statuses);
+        const defaultStatus = statuses.find((status) => status.id === emptyAddPatientDraft.status);
+        if (defaultStatus) {
+          setAddPatientDraft((current) => ({
+            ...current,
+            status: defaultStatus.id,
+            statusLabel: defaultStatus.title,
+          }));
+          setAddPatientStatusSearch(defaultStatus.title);
+        }
+      } catch (err) {
+        console.error("Failed to load patient statuses:", err);
+      } finally {
+        if (isMounted) {
+          setAddPatientStatusLoading(false);
+        }
+      }
+    };
+
+    void fetchPatientStatuses();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -922,6 +1025,96 @@ export default function PatientsPageClient() {
     setRecipientModal(null);
   };
 
+  const handleAddPatientDraftChange = (field: keyof AddPatientDraft, value: string | number | null) => {
+    setAddPatientDraft((current) => ({
+      ...current,
+      [field]: field === "phone" && typeof value === "string" ? maskPhoneInput(value) : value,
+    }));
+  };
+
+  const handleCloseAddPatient = () => {
+    if (addPatientSaving) {
+      return;
+    }
+
+    setAddPatientOpen(false);
+    setAddPatientDraft(emptyAddPatientDraft);
+    setAddPatientStatusSearch(emptyAddPatientDraft.statusLabel);
+    setAddPatientStatusOpen(false);
+    setAddPatientFacilitySearch("");
+    setAddPatientFacilityOpen(false);
+    setAddPatientError("");
+  };
+
+  const handleSelectAddPatientStatus = (status: PatientStatusOption) => {
+    setAddPatientDraft((current) => ({
+      ...current,
+      status: status.id,
+      statusLabel: status.title,
+    }));
+    setAddPatientStatusSearch(status.title);
+    setAddPatientStatusOpen(false);
+  };
+
+  const handleSelectAddPatientFacility = (facility: FacilityOption) => {
+    setAddPatientDraft((current) => ({
+      ...current,
+      facilityId: facility.id,
+    }));
+    setAddPatientFacilitySearch(facility.name);
+    setAddPatientFacilityOpen(false);
+  };
+
+  const handleCreatePatient = async () => {
+    const firstName = addPatientDraft.firstName.trim();
+    const lastName = addPatientDraft.lastName.trim();
+
+    if (!firstName || !lastName || !addPatientDraft.dob || !addPatientDraft.doi) {
+      setAddPatientError("First name, last name, DOB, and DOI are required.");
+      return;
+    }
+
+    setAddPatientSaving(true);
+    setAddPatientError("");
+
+    try {
+      const result = await createPatient({
+        firstName,
+        lastName,
+        dob: addPatientDraft.dob,
+        doi: addPatientDraft.doi,
+        phone: addPatientDraft.phone,
+        email: addPatientDraft.email.trim(),
+        facilityId: addPatientDraft.facilityId,
+        status: addPatientDraft.status || "to schedule",
+      });
+
+      if (!result.patient) {
+        throw new Error("Create patient response did not include a patient.");
+      }
+
+      setPatients((current) => [result.patient as PatientListItem, ...current]);
+      setPagination((current) => ({
+        ...current,
+        totalItems: current.totalItems + 1,
+        totalPages: Math.max(1, Math.ceil((current.totalItems + 1) / current.pageSize)),
+      }));
+      selectPatient(createWorkspacePatientFromListItem(result.patient));
+      setAddPatientOpen(false);
+      setAddPatientDraft(emptyAddPatientDraft);
+      setAddPatientStatusSearch(emptyAddPatientDraft.statusLabel);
+      setAddPatientStatusOpen(false);
+      setAddPatientFacilitySearch("");
+      setAddPatientFacilityOpen(false);
+      router.push("/workspace");
+    } catch (err) {
+      console.error("Failed to create patient:", err);
+      setAddPatientError("Unable to create patient right now.");
+    } finally {
+      setAddPatientSaving(false);
+    }
+  };
+
 
   return (
     <section className="patients-page">
@@ -947,7 +1140,7 @@ export default function PatientsPageClient() {
                   placeholder="Search patient, DOI, facility, status..."
                 />
               </div>
-              <button className="mini primary" id="addPatientBtn" type="button">
+              <button className="mini primary" id="addPatientBtn" type="button" onClick={() => setAddPatientOpen(true)}>
                 + Add Patient
               </button>
             </div>
@@ -1308,6 +1501,193 @@ export default function PatientsPageClient() {
           </div>
         </div>
       </div>
+
+      {addPatientOpen && (
+        <div className="modal-backdrop show">
+          <div className="modal add-patient-modal">
+            <div className="mhead">
+              <div className="mtitle">Add Patient</div>
+              <div className="right">
+                <button className="mini" type="button" onClick={handleCloseAddPatient}>
+                  Close
+                </button>
+              </div>
+            </div>
+            <div className="mbody">
+              {addPatientError && (
+                <div className="lawyer-emr-message error" style={{ margin: "0 0 12px" }}>
+                  {addPatientError}
+                </div>
+              )}
+              <div className="formgrid add-patient-formgrid">
+                <label className="lab" htmlFor="addPatientFirstName">First Name *</label>
+                <input
+                  className="form-input"
+                  id="addPatientFirstName"
+                  value={addPatientDraft.firstName}
+                  onChange={(event) => handleAddPatientDraftChange("firstName", event.target.value)}
+                  placeholder="First name"
+                  autoFocus
+                />
+
+                <label className="lab" htmlFor="addPatientLastName">Last Name *</label>
+                <input
+                  className="form-input"
+                  id="addPatientLastName"
+                  value={addPatientDraft.lastName}
+                  onChange={(event) => handleAddPatientDraftChange("lastName", event.target.value)}
+                  placeholder="Last name"
+                />
+
+                <label className="lab" htmlFor="addPatientDob">DOB *</label>
+                <input
+                  className="form-input"
+                  id="addPatientDob"
+                  type="date"
+                  value={addPatientDraft.dob}
+                  onChange={(event) => handleAddPatientDraftChange("dob", event.target.value)}
+                  required
+                />
+
+                <label className="lab" htmlFor="addPatientDoi">DOI *</label>
+                <input
+                  className="form-input"
+                  id="addPatientDoi"
+                  type="date"
+                  value={addPatientDraft.doi}
+                  onChange={(event) => handleAddPatientDraftChange("doi", event.target.value)}
+                  required
+                />
+
+                <label className="lab" htmlFor="addPatientPhone">Phone</label>
+                <input
+                  className="form-input"
+                  id="addPatientPhone"
+                  value={addPatientDraft.phone}
+                  onChange={(event) => handleAddPatientDraftChange("phone", event.target.value)}
+                  placeholder="(555) 555-5555"
+                />
+
+                <label className="lab" htmlFor="addPatientEmail">Email</label>
+                <input
+                  className="form-input"
+                  id="addPatientEmail"
+                  type="email"
+                  value={addPatientDraft.email}
+                  onChange={(event) => handleAddPatientDraftChange("email", event.target.value)}
+                  placeholder="patient@example.com"
+                />
+
+                <label className="lab" htmlFor="addPatientFacility">Facility</label>
+                <div className="searchable-select">
+                  <input
+                    className="form-input"
+                    id="addPatientFacility"
+                    value={addPatientFacilitySearch}
+                    onBlur={() => {
+                      window.setTimeout(() => {
+                        setAddPatientFacilityOpen(false);
+                        if (!addPatientDraft.facilityId) {
+                          setAddPatientFacilitySearch("");
+                          return;
+                        }
+
+                        const selectedFacility = facilities.find((facility) => facility.id === addPatientDraft.facilityId);
+                        setAddPatientFacilitySearch(selectedFacility?.name ?? "");
+                      }, 150);
+                    }}
+                    onChange={(event) => {
+                      setAddPatientFacilitySearch(event.target.value);
+                      setAddPatientFacilityOpen(true);
+                      if (addPatientDraft.facilityId) {
+                        handleAddPatientDraftChange("facilityId", null);
+                      }
+                    }}
+                    onFocus={() => setAddPatientFacilityOpen(true)}
+                    placeholder="Search facility..."
+                  />
+                  {addPatientFacilityOpen && (
+                    <div className="searchable-select-menu">
+                      {filteredAddPatientFacilities.length === 0 && (
+                        <div className="searchable-select-empty">No facilities found.</div>
+                      )}
+                      {filteredAddPatientFacilities.map((facility) => {
+                        const suffix = [facility.city, facility.state].filter(Boolean).join(", ");
+
+                        return (
+                          <button
+                            className={`searchable-select-option${facility.id === addPatientDraft.facilityId ? " selected" : ""}`}
+                            key={facility.id}
+                            type="button"
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => handleSelectAddPatientFacility(facility)}
+                          >
+                            <span>{facility.name}</span>
+                            {suffix && <small>{suffix}</small>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <label className="lab" htmlFor="addPatientStatus">Status</label>
+                <div className="searchable-select">
+                  <input
+                    className="form-input"
+                    id="addPatientStatus"
+                    value={addPatientStatusSearch}
+                    onBlur={() => {
+                      window.setTimeout(() => {
+                        setAddPatientStatusOpen(false);
+                        setAddPatientStatusSearch(addPatientDraft.statusLabel);
+                      }, 150);
+                    }}
+                    onChange={(event) => {
+                      setAddPatientStatusSearch(event.target.value);
+                      setAddPatientStatusOpen(true);
+                    }}
+                    onFocus={() => setAddPatientStatusOpen(true)}
+                    placeholder="Search status..."
+                  />
+                  {addPatientStatusOpen && (
+                    <div className="searchable-select-menu">
+                      {addPatientStatusLoading && (
+                        <div className="searchable-select-empty">Loading statuses...</div>
+                      )}
+                      {!addPatientStatusLoading && filteredAddPatientStatusOptions.length === 0 && (
+                        <div className="searchable-select-empty">No statuses found.</div>
+                      )}
+                      {!addPatientStatusLoading && filteredAddPatientStatusOptions.map((status) => (
+                        <button
+                          className={`searchable-select-option${status.id === addPatientDraft.status ? " selected" : ""}`}
+                          key={status.id}
+                          type="button"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => handleSelectAddPatientStatus(status)}
+                        >
+                          <span>{status.title}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="hint" style={{ marginTop: "12px" }}>
+                The patient will be created in OpenEMR and opened in the patient workspace.
+              </div>
+            </div>
+            <div className="mfoot">
+              <button className="mini" type="button" onClick={handleCloseAddPatient} disabled={addPatientSaving}>
+                Cancel
+              </button>
+              <button className="mini primary" type="button" onClick={() => void handleCreatePatient()} disabled={addPatientSaving}>
+                {addPatientSaving ? "Creating..." : "Create Patient"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {recipientModal && (
         <RecipientModal

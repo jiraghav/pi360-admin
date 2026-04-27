@@ -3180,6 +3180,81 @@
     align-items: center;
   }
 
+  .add-patient-modal {
+    width: min(820px, 96vw);
+    overflow: visible;
+  }
+
+  .add-patient-modal .mbody {
+    overflow: visible;
+  }
+
+  .add-patient-formgrid {
+    grid-template-columns: minmax(120px, 170px) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .searchable-select {
+    position: relative;
+    min-width: 0;
+  }
+
+  .searchable-select-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: 70;
+    display: grid;
+    gap: 4px;
+    max-height: 240px;
+    overflow: auto;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, .98);
+    box-shadow: 0 20px 48px rgba(15, 23, 42, .18);
+  }
+
+  .add-patient-formgrid .searchable-select-menu {
+    top: auto;
+    bottom: calc(100% + 6px);
+    z-index: 120;
+    max-height: 220px;
+  }
+
+  .searchable-select-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    border: 0;
+    border-radius: 10px;
+    padding: 8px 10px;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+    text-align: left;
+    font-weight: 850;
+  }
+
+  .searchable-select-option:hover,
+  .searchable-select-option.selected {
+    background: rgba(47, 111, 236, .08);
+  }
+
+  .searchable-select-option small,
+  .searchable-select-empty {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 750;
+  }
+
+  .searchable-select-empty {
+    padding: 8px 10px;
+  }
+
   .lab {
     font-size: 12px;
     font-weight: 650;
@@ -3340,7 +3415,7 @@
 
   .form-input {
     width: 100%;
-    padding: 12px 12px 12px 40px;
+    padding: 12px 12px 12px 12px;
     border: 1px solid rgba(31, 36, 48, 0.1);
     border-radius: 14px;
     background: rgba(255, 255, 255, 0.8);
@@ -3559,6 +3634,24 @@
       order: 2 !important;
       min-width: 0 !important;
       width: 100% !important;
+    }
+
+    .add-patient-modal {
+      width: 100% !important;
+      max-height: calc(100dvh - 16px) !important;
+    }
+
+    .add-patient-formgrid {
+      grid-template-columns: 1fr;
+      gap: 7px;
+    }
+
+    .add-patient-formgrid .lab {
+      margin-top: 4px;
+    }
+
+    .searchable-select-menu {
+      max-height: 190px;
     }
 
     .top-actions {

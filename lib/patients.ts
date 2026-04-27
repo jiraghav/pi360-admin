@@ -40,6 +40,22 @@ export interface SavePatientDemographicsInput {
   doi: string;
 }
 
+export interface CreatePatientInput {
+  firstName: string;
+  lastName: string;
+  dob?: string;
+  doi?: string;
+  phone?: string;
+  email?: string;
+  facilityId?: number | null;
+  status?: string;
+}
+
+export interface PatientStatusOption {
+  id: string;
+  title: string;
+}
+
 export interface SavePatientVisitsBillingInput {
   pid: number;
   lastVisit: string;
@@ -275,6 +291,61 @@ export async function getPatientsPage(
     patients: mapPatients(response.data),
     pagination: mapPagination(response.data),
   };
+}
+
+export async function createPatient(input: CreatePatientInput): Promise<{ patient: PatientListItem | null; message: string }> {
+  const response = await apiRequest<ApiEnvelope>("create_patient.php", {
+    method: "POST",
+    withAuth: true,
+    cache: "no-store",
+    body: input,
+  });
+
+  const payload = response.data && typeof response.data === "object"
+    ? (response.data as Record<string, unknown>)
+    : {};
+  const patients = mapPatients({ patients: payload.patient ? [payload.patient] : [] });
+
+  return {
+    patient: patients[0] ?? null,
+    message: typeof payload.message === "string" ? payload.message : "Patient created.",
+  };
+}
+
+export async function getPatientStatusOptions(search = "", limit = 100): Promise<PatientStatusOption[]> {
+  const query = new URLSearchParams({
+    limit: String(limit),
+  });
+
+  if (search.trim()) {
+    query.set("search", search.trim());
+  }
+
+  const response = await apiRequest<ApiEnvelope>(`patient_status_options.php?${query.toString()}`, {
+    method: "GET",
+    withAuth: true,
+    cache: "no-store",
+  });
+
+  const payload = response.data;
+  if (!payload || typeof payload !== "object") {
+    return [];
+  }
+
+  const rawStatuses = (payload as Record<string, unknown>).statuses;
+  if (!Array.isArray(rawStatuses)) {
+    return [];
+  }
+
+  return rawStatuses
+    .map((item) => {
+      const row = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
+      const id = toNullableString(row.id) ?? "";
+      const title = toNullableString(row.title) ?? id;
+
+      return { id, title };
+    })
+    .filter((status) => status.id && status.title);
 }
 
 export async function savePatientDemographics(
