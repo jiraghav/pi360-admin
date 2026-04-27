@@ -22,12 +22,17 @@ const priorityOptions = [
   { value: "3", label: "High" },
 ];
 
-const statusOptions = [
+const baseStatusOptions = [
   { value: "", label: "All" },
   { value: "99", label: "Not Completed" },
   { value: "1", label: "Pending" },
   { value: "2", label: "Completed" },
   { value: "3", label: "In Progress" },
+];
+
+const authorizationStatusOptions = [
+  { value: "4", label: "Accepted" },
+  { value: "5", label: "Declined" },
 ];
 
 interface TaskNotificationsPageConfig {
@@ -38,6 +43,7 @@ interface TaskNotificationsPageConfig {
   partyLabel?: string;
   hideMessageType?: boolean;
   hidePartyColumn?: boolean;
+  includeAuthorizationStatusOptions?: boolean;
 }
 
 const formatTaskDateOnly = (value: string | null) => {
@@ -61,6 +67,7 @@ export default function LawyerNotificationsPageClient({
   partyLabel = "Lawyer",
   hideMessageType = false,
   hidePartyColumn = false,
+  includeAuthorizationStatusOptions = false,
 }: TaskNotificationsPageConfig = {}) {
   const router = useRouter();
   const { selectPatient } = useSelectedPatient();
@@ -90,6 +97,12 @@ export default function LawyerNotificationsPageClient({
   const totalPages = useMemo(
     () => Math.max(1, Math.ceil(filteredItems / pageSize)),
     [filteredItems, pageSize],
+  );
+  const statusOptions = useMemo(
+    () => includeAuthorizationStatusOptions
+      ? [...baseStatusOptions, ...authorizationStatusOptions]
+      : baseStatusOptions,
+    [includeAuthorizationStatusOptions],
   );
   const showingStart = filteredItems === 0 ? 0 : (page - 1) * pageSize + 1;
   const showingEnd = Math.min(page * pageSize, filteredItems);

@@ -7,6 +7,7 @@ export default function AuthorizationTasksPage() {
       authorization={1}
       title="Authorization Tasks"
       partyLabel="Lawyer"
+      includeAuthorizationStatusOptions
     />
   );
 }

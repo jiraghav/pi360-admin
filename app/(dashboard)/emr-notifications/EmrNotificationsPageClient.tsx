@@ -16,9 +16,9 @@ import {
 import { subscribeToNotificationRefresh } from "@/app/components/PusherNotifications";
 
 const readStatusOptions = [
-  { value: "0", label: "Unread" },
   { value: "", label: "All" },
   { value: "1", label: "Read" },
+  { value: "0", label: "Unread" },
 ];
 
 export default function EmrNotificationsPageClient() {
@@ -32,6 +32,12 @@ export default function EmrNotificationsPageClient() {
   const [patientFilter, setPatientFilter] = useState("");
   const [titleFilter, setTitleFilter] = useState("");
   const [readStatus, setReadStatus] = useState("0");
+  const [appliedFilters, setAppliedFilters] = useState({
+    lawyer: "",
+    patient: "",
+    title: "",
+    readStatus: "0",
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -59,10 +65,10 @@ export default function EmrNotificationsPageClient() {
       const result = await getEmrNotifications({
         page: nextPage,
         pageSize,
-        readStatus,
-        lawyer: lawyerFilter,
-        patient: patientFilter,
-        title: titleFilter,
+        readStatus: appliedFilters.readStatus,
+        lawyer: appliedFilters.lawyer,
+        patient: appliedFilters.patient,
+        title: appliedFilters.title,
       });
 
       setNotifications(result.notifications);
@@ -76,7 +82,7 @@ export default function EmrNotificationsPageClient() {
     } finally {
       setLoading(false);
     }
-  }, [lawyerFilter, page, pageSize, patientFilter, readStatus, titleFilter]);
+  }, [appliedFilters, page, pageSize]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -94,7 +100,13 @@ export default function EmrNotificationsPageClient() {
 
   const handleFilterSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    void fetchNotifications(1);
+    setPage(1);
+    setAppliedFilters({
+      lawyer: lawyerFilter,
+      patient: patientFilter,
+      title: titleFilter,
+      readStatus,
+    });
   };
 
   const handleResetFilters = () => {
@@ -102,9 +114,13 @@ export default function EmrNotificationsPageClient() {
     setPatientFilter("");
     setTitleFilter("");
     setReadStatus("0");
-    window.setTimeout(() => {
-      void fetchNotifications(1);
-    }, 0);
+    setPage(1);
+    setAppliedFilters({
+      lawyer: "",
+      patient: "",
+      title: "",
+      readStatus: "0",
+    });
   };
 
   const handleReadStatus = async (notification: EmrNotification, status: number) => {

@@ -357,7 +357,7 @@ export async function getEmrNotifications(query: EmrNotificationsQuery = {}): Pr
   const params = new URLSearchParams();
   params.set("page", String(page));
   params.set("pageSize", String(pageSize));
-  params.set("readStatus", query.readStatus ?? "0");
+  params.set("read_status", query.readStatus ?? "0");
   params.set("lawyer", query.lawyer?.trim() ?? "");
   params.set("patient", query.patient?.trim() ?? "");
   params.set("title", query.title?.trim() ?? "");
